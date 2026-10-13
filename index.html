@@ -189,7 +189,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
         <div class="dashboard-grid">
           <button id="openScheduleBtn" class="module-btn module-schedule">
             <span class="module-name">일일작업등록</span>
-            <span class="module-sub">BLK 조립공정 · 소조립 → 중조립 → 대조립</span>
+            <span class="module-sub">소조립 입고 → 중조립 → 대조립 · 치공구 기록</span>
           </button>
           <button class="module-btn module-dev" disabled>
             <span class="module-name">블럭일정관리</span>
@@ -233,11 +233,12 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
   </div>
 </div>
 
-<!-- 일일작업등록 모듈 (조립공정 BLK: 소조립 → 중조립 → 대조립) -->
+<!-- 일일작업등록 모듈 (조립공정: 대조립 BLK ← 중조립 BLK ← 소조립) -->
 <div id="scheduleApp" class="container hidden">
-  <div class="tabs" style="grid-template-columns:repeat(2,1fr)">
+  <div class="tabs" style="grid-template-columns:repeat(3,1fr)">
     <button id="assemblyFlowTab" class="active" type="button">조립공정 등록</button>
     <button id="scheduleListTab" type="button">등록 목록</button>
+    <button id="blockTreeTab" type="button">블록 구성</button>
   </div>
 
   <section id="assemblyFlowSection">
@@ -245,7 +246,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
       <div class="section-heading">
         <div>
           <h2>일일작업등록 · 조립공정</h2>
-          <div class="hint">BLK 하나가 한 공장 안에서 소조립 → 품질검사 → 중조립 → 품질검사 → 대조립 → 최종 품질검사 순서로 진행됩니다. 호선과 BLK NO만 넣으면 지금 등록할 공정이 자동으로 정해지고, 앞 공정의 품질검사가 합격해야 다음 공정이 열립니다.</div>
+          <div class="hint">대조립 BLK(예: 805)는 여러 중조립 BLK(805R1 · 805R2 · 805M1)로, 중조립은 여러 소조립으로 이뤄집니다. 중조립 BLK마다 <strong>소조립 입고 확인 → 입고 검사 → 중조립 → 품질검사</strong>를 거치고, 구성 중조립이 모두 합격하면 대조립 BLK에서 <strong>대조립 → 최종 품질검사</strong>를 진행합니다. 호선과 BLK NO만 넣으면 지금 등록할 공정이 자동으로 정해집니다.</div>
         </div>
         <button id="asmRefreshBtn" class="refresh" type="button" style="flex:0 0 auto;white-space:nowrap">새로고침</button>
       </div>
@@ -265,29 +266,42 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
             <option value="ETC">기타</option>
           </select>
         </div>
-        <div><label>호선</label><input id="asmShipNo" placeholder="예: 2372"></div>
-        <div><label>BLK NO</label><input id="asmBlkNo" placeholder="예: E11A"></div>
-        <div><label>조립장 / 구역</label><input id="asmArea" placeholder="예: 조립4공장 A-BAY"></div>
+        <div><label>호선</label><input id="asmShipNo" placeholder="예: 2541"></div>
+        <div><label>BLK NO <span class="hint">(중조립 · 대조립)</span></label><input id="asmBlkNo" list="asmBlkOptions" autocomplete="off" placeholder="예: 805R1 또는 805"><datalist id="asmBlkOptions"></datalist></div>
+        <div><label>조립장 / 구역</label><input id="asmArea" placeholder="예: 조립4공장 1BAY"></div>
       </div>
 
       <div class="asm-section-title">2. 현재 공정 위치</div>
+      <div id="asmTreeBox" class="asm-tree-box hidden"></div>
       <div id="asmFlow" class="asm-flow"></div>
       <div id="asmCurrentBox" class="asm-current-box">호선과 BLK NO를 입력하면 현재 진행 가능한 공정을 확인합니다.</div>
       <div id="asmCaution" class="asm-caution hidden"></div>
 
-      <div class="asm-section-title">3. 오늘 작업 내용</div>
+      <div id="asmIntakeWrap" class="hidden">
+        <div class="asm-section-title">3. 소조립 입고 확인</div>
+        <div class="hint">이 중조립에 들어갈 소조립이 모두 입고되었는지, 입고된 소조립에 이상이 없는지 확인합니다. 모두 입고되고 이상이 없어야 완료확인(입고 검사 요청)을 할 수 있습니다. 입고율(%)은 입고 수량으로 자동 계산됩니다.</div>
+        <div id="asmIntakeBox" class="asm-intake"></div>
+      </div>
+
+      <div id="asmToolsWrap" class="hidden">
+        <div class="asm-section-title">3. 작업 전 필수 치공구 확인</div>
+        <div id="asmToolsHint" class="hint"></div>
+        <div id="asmToolsBox" class="asm-tools"></div>
+      </div>
+
+      <div class="asm-section-title">4. 오늘 작업 내용</div>
       <div class="asm-form-grid">
         <div><label>작업일</label><input id="asmWorkDate" type="date"></div>
         <div><label>작성자</label><input id="asmAuthor" readonly></div>
         <div><label>오늘 투입 인원</label><input id="asmManpower" type="number" min="1" step="1" value="1"></div>
         <div><label>현재 공정률 (%)</label><input id="asmProgress" type="number" min="0" max="100" step="1" value="0"></div>
         <div class="wide"><label>등록 공정 <span class="hint">(자동)</span></label><div id="asmStepLabel" class="asm-step-label">-</div></div>
-        <div class="wide"><label>오늘 작업내용</label><textarea id="asmWorkContent" placeholder="예: FB 취부 및 용접 / 보강재 취부 / 변형교정 등"></textarea></div>
+        <div class="wide"><label>오늘 작업내용</label><textarea id="asmWorkContent" placeholder="예: 론지 · FB 취부 및 용접 / 보강재 취부 / 변형교정 등"></textarea></div>
       </div>
 
       <label class="asm-check-row">
         <input id="asmConfirm" type="checkbox">
-        <span><strong>공정 완료 확인</strong><br><span class="hint">공정률 100%일 때만 체크할 수 있으며, 체크하여 등록하면 즉시 품질검사 대기로 전환됩니다.</span></span>
+        <span><strong>공정 완료 확인</strong><br><span class="hint">공정률 100%일 때만 체크할 수 있으며, 체크하여 등록하면 즉시 검사 대기로 전환됩니다.</span></span>
       </label>
 
       <div class="asm-actions">
@@ -308,12 +322,12 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
         <h2>조립공정 등록 목록</h2>
         <button id="refreshScheduleListBtn" class="refresh" type="button">새로고침</button>
       </div>
-      <div class="hint">작업일 · 호선 · BLK로 조회합니다. 공정(소조립 · 중조립 · 대조립), 차수, 공정률, 투입 인원, 품질 판정을 함께 확인합니다.</div>
+      <div class="hint">작업일 · 호선 · BLK로 조회합니다. 공정(소조립 입고 · 중조립 · 대조립), 차수, 공정률, 투입 인원, 입고 · 치공구 기록, 품질 판정을 함께 확인합니다.</div>
 
       <div class="schedule-list-filters asm-list-filters">
         <div><label>작업일</label><input id="scheduleFilterDate" type="date"></div>
-        <div><label>호선</label><input id="scheduleFilterShip" placeholder="예: 2372"></div>
-        <div><label>BLK</label><input id="scheduleFilterBlk" placeholder="예: E11A"></div>
+        <div><label>호선</label><input id="scheduleFilterShip" placeholder="예: 2541"></div>
+        <div><label>BLK</label><input id="scheduleFilterBlk" placeholder="예: 805"></div>
         <button id="scheduleSearchBtn" class="primary" type="button" style="margin-top:0">조회</button>
         <button id="scheduleResetBtn" class="secondary" type="button">전체</button>
       </div>
@@ -321,6 +335,50 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
       <div id="scheduleListSummary" class="schedule-summary hidden"></div>
       <div id="scheduleListStatus" class="status"></div>
       <div id="scheduleList"></div>
+    </div>
+  </section>
+
+  <section id="blockTreeSection" class="hidden">
+    <div class="card">
+      <div class="section-heading">
+        <div>
+          <h2>블록 구성 · 대조립 / 중조립 / 소조립</h2>
+          <div class="hint">원청 블록 분할도의 대조립 번호(예: 805)를 기준으로, 그 안의 중조립(805R1 · 805R2 · 805M1)과 중조립마다 들어갈 소조립을 등록합니다. 이 구성으로 소조립 입고 확인 목록과 대조립 시작 조건(구성 중조립 모두 합격)을 판단합니다.</div>
+        </div>
+        <button id="asmTreeRefresh" class="refresh" type="button" style="flex:0 0 auto;white-space:nowrap">새로고침</button>
+      </div>
+
+      <div class="asm-form-grid">
+        <div>
+          <label>선종</label>
+          <select id="asmTreeShipType">
+            <option value="">선종 선택</option>
+            <option value="LPG">LPG</option>
+            <option value="LNG">LNG</option>
+            <option value="VLCC">VLCC</option>
+            <option value="CONT">CONT</option>
+            <option value="ETC">기타</option>
+          </select>
+        </div>
+        <div><label>호선</label><input id="asmTreeShipNo" placeholder="예: 2541"></div>
+        <div><label>대조립 BLK</label><input id="asmTreeGrand" placeholder="예: 805"></div>
+        <div></div>
+        <div class="wide" style="grid-column:1/-1"><label>중조립 · 소조립 구성 <span class="hint">(한 줄에 중조립 하나씩 · 중조립 번호 : 소조립 번호, 소조립 번호 …)</span></label>
+          <textarea id="asmTreeLines" style="min-height:120px" placeholder="805R1 : 805R1-S1, 805R1-S2, 805R1-S3&#10;805R2 : 805R2-S1, 805R2-S2&#10;805M1 : 805M1-S1, 805M1-S2, 805M1-S3, 805M1-S4"></textarea>
+        </div>
+      </div>
+      <div class="asm-actions">
+        <button id="asmTreeSave" class="primary" type="button" style="margin-top:0;flex:1 1 220px">구성 저장</button>
+        <button id="asmTreeClear" class="secondary" type="button">입력 초기화</button>
+      </div>
+      <div id="asmTreeStatus" class="status"></div>
+
+      <div class="schedule-list-filters" style="grid-template-columns:1fr auto auto">
+        <div><label>호선</label><input id="asmTreeFilterShip" placeholder="전체 또는 예: 2541"></div>
+        <button id="asmTreeSearch" class="primary" type="button" style="margin-top:0">조회</button>
+        <button id="asmTreeReset" class="secondary" type="button">전체</button>
+      </div>
+      <div id="asmTreeList"></div>
     </div>
   </section>
 </div>
@@ -332,12 +390,12 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
       <h2>생산통합지표</h2>
       <button id="refreshProductionDashboardBtn" class="refresh" type="button">새로고침</button>
     </div>
-    <div class="hint">일일작업등록과 품질검사 결과를 BLK 단위로 자동 집계합니다. 각 BLK가 소조립 → 품질검사 → 중조립 → 품질검사 → 대조립 → 최종 품질검사 중 어디에 있는지, 검사대기 · 재작업이 어디에 걸려 있는지, 어떤 부적합이 반복되는지 확인합니다.</div>
+    <div class="hint">일일작업등록과 검사 결과를 대조립 BLK 단위로 자동 집계합니다. 대조립(예: 805) 아래 구성 중조립(805R1 · 805R2 · 805M1)마다 소조립 입고 → 입고 검사 → 중조립 → 품질검사 중 어디에 있는지, 대조립을 시작할 수 있는지, 검사대기 · 재작업이 어디에 걸려 있는지, 어떤 부적합이 반복되는지, 작업 전 치공구가 준비되었는지 확인합니다.</div>
 
     <div class="production-dashboard-filter">
       <div>
         <label>호선</label>
-        <input id="productionDashboardShip" placeholder="전체 또는 예: 2372">
+        <input id="productionDashboardShip" placeholder="전체 또는 예: 2541">
       </div>
       <button id="productionDashboardSearchBtn" class="primary" type="button" style="margin-top:0">조회</button>
     </div>
@@ -345,6 +403,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
     <div id="asmDashboardSummary" class="asm-summary-grid" style="margin-top:14px"></div>
     <div id="asmDashboardStatus" class="status"></div>
     <div id="asmDefectBox" class="asm-defect-box"></div>
+    <div id="asmToolsStatBox" class="asm-defect-box"></div>
     <div id="asmDashboardContent"></div>
   </div>
 </div>
@@ -382,14 +441,14 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
     <div class="section-heading">
       <div>
         <h2>조립 품질검사</h2>
-        <div class="hint">공정 완료확인된 BLK가 목록으로 표시됩니다. 검사할 건의 <strong>검사항목 열기</strong>를 누르면 체크리스트가 펼쳐집니다. 검사항목마다 적합 · 부적합 · 해당없음을 선택하고 종합 판정 의견을 적은 뒤 합격 또는 불합격을 저장합니다. 합격하면 다음 공정이 열리고, 불합격하면 같은 공정 재작업으로 돌아갑니다. 판정 결과는 작업등록자의 나의 업무 · 알림에 표시됩니다.</div>
+        <div class="hint">완료확인된 공정이 목록으로 표시됩니다. <strong>소조립 입고 확인</strong>은 입고 검사, 중조립은 품질검사, 대조립은 최종 품질검사입니다. 검사할 건의 <strong>검사항목 열기</strong>를 누르면 체크리스트가 펼쳐집니다. 검사항목마다 적합 · 부적합 · 해당없음을 선택하고 종합 판정 의견을 적은 뒤 합격 또는 불합격을 저장합니다. 합격하면 다음 공정이 열리고, 불합격하면 같은 공정 재작업(입고는 보수 · 재입고)으로 돌아갑니다. 판정 결과는 작업등록자의 나의 업무 · 알림에 표시됩니다.</div>
       </div>
       <button id="asmQualityRefresh" class="refresh" type="button" style="flex:0 0 auto;white-space:nowrap">새로고침</button>
     </div>
 
     <div class="schedule-list-filters">
-      <div><label>호선</label><input id="asmQualityShip" placeholder="전체 또는 예: 2372"></div>
-      <div><label>BLK</label><input id="asmQualityBlk" placeholder="전체 또는 예: E11A"></div>
+      <div><label>호선</label><input id="asmQualityShip" placeholder="전체 또는 예: 2541"></div>
+      <div><label>BLK</label><input id="asmQualityBlk" placeholder="전체 또는 예: 805"></div>
       <button id="asmQualitySearch" class="primary" type="button" style="margin-top:0">조회</button>
       <button id="asmQualityReset" class="secondary" type="button">전체</button>
     </div>
@@ -411,7 +470,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
     <div class="card">
       <h2>현장 확인요청 등록</h2>
       <label>호선</label><input id="reqShip" placeholder="예: 2751">
-      <label>위치</label><input id="reqArea" placeholder="예: 조립4 / BLK E11A">
+      <label>위치</label><input id="reqArea" placeholder="예: 조립4 / BLK 805R1">
       <label>작성자</label><input id="reqAuthor" readonly>
       <label>확인요청자</label>
       <div id="requesterGrid" class="requester-grid"></div>
@@ -863,7 +922,7 @@ $("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")$("adminLog
 $("homeBtn").onclick=()=>showHome(true);
 $("logoutBtn").onclick=async()=>{stopNotificationPolling();await supabase.auth.signOut();isAdmin=false;currentUserName="";currentUserId=null;showAuth();replaceState({screen:"auth"})};
 
-/* ---------- 일일작업등록 (조립공정 BLK: 소조립 → 중조립 → 대조립) ---------- */
+/* ---------- 일일작업등록 (대조립 BLK ← 중조립 BLK ← 소조립 입고) ---------- */
 /* 화면 전환만 여기서 합니다. 등록 · 공정상태 · 등록 목록의 실제 동작은 아래 조립공정 스크립트에 있습니다. */
 
 /* Supabase는 한 번에 돌려주는 행 수에 상한(기본 1000행)이 있으므로, 집계가 누락되지 않게 빈 결과가 나올 때까지 이어서 읽습니다. */
@@ -886,19 +945,22 @@ function productionDateOnly(v){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-/* mode: "list"면 등록 목록, 그 밖에는 조립공정 등록(예전 기록의 "register"도 등록 화면으로 연결) */
+/* mode: "list"면 등록 목록, "tree"면 블록 구성, 그 밖에는 조립공정 등록(예전 기록의 "register"도 등록 화면으로 연결) */
 function showScheduleTab(mode){
   hideAllMain();showHeader();scheduleApp.classList.remove("hidden");
-  const list=mode==="list";
-  $("assemblyFlowTab").classList.toggle("active",!list);
-  $("scheduleListTab").classList.toggle("active",list);
-  $("assemblyFlowSection").classList.toggle("hidden",list);
-  $("scheduleListSection").classList.toggle("hidden",!list);
-  if(list)window.asmLoadWorkList?.();else window.asmOpenRegister?.();
+  const tab=mode==="list"?"list":mode==="tree"?"tree":"assembly";
+  $("assemblyFlowTab").classList.toggle("active",tab==="assembly");
+  $("scheduleListTab").classList.toggle("active",tab==="list");
+  $("blockTreeTab").classList.toggle("active",tab==="tree");
+  $("assemblyFlowSection").classList.toggle("hidden",tab!=="assembly");
+  $("scheduleListSection").classList.toggle("hidden",tab!=="list");
+  $("blockTreeSection").classList.toggle("hidden",tab!=="tree");
+  if(tab==="list")window.asmLoadWorkList?.();else if(tab==="tree")window.asmOpenTree?.();else window.asmOpenRegister?.();
 }
 $("openScheduleBtn").onclick=()=>{showScheduleTab("assembly");pushState({screen:"schedule-tab",tab:"assembly",admin:isAdmin})};
 $("assemblyFlowTab").onclick=()=>{showScheduleTab("assembly");pushState({screen:"schedule-tab",tab:"assembly",admin:isAdmin})};
 $("scheduleListTab").onclick=()=>{showScheduleTab("list");pushState({screen:"schedule-tab",tab:"list",admin:isAdmin})};
+$("blockTreeTab").onclick=()=>{showScheduleTab("tree");pushState({screen:"schedule-tab",tab:"tree",admin:isAdmin})};
 
 /* ---------- 생산통합지표 (BLK별 공정 · 품질 현황) ---------- */
 function showProductionDashboard(push=true){
@@ -2112,7 +2174,7 @@ function qualityResultCard(record){
   const card=document.createElement("div"),unread=!record.quality_result_read_at;
   card.className=`request-card ${record.quality_status==="합격"?"completed":"pending"}${unread?" mywork-unread":""}`;
   const badge=record.quality_status==="합격"?'<span class="badge badge-completed">품질 합격</span>':'<span class="badge badge-delete">품질 불합격</span>';
-  card.innerHTML=`<div class="record-top"><div class="record-title">품질검사 결과 · ${escapeHtml(record.ship_no||"-")} / BLK ${escapeHtml(record.blk_no||"-")}</div><div>${badge}${unread?' <span class="new-badge">NEW</span>':""}</div></div><div class="record-meta">공정: ${escapeHtml(record.process_step||"-")} · ${Number(record.attempt_no||1)}차<br>작업자: ${escapeHtml(record.author_name||"-")} · 검사자: ${escapeHtml(record.quality_checked_name||"-")}<br>검사일시: ${escapeHtml(formatDateTime(record.quality_checked_at))}</div><div class="request-content-preview"><strong>종합 판정 의견</strong><br>${escapeHtml(record.quality_note||"-")}</div>${qualityChecklistReadOnlyHtml(record.quality_checklist)}`;
+  card.innerHTML=`<div class="record-top"><div class="record-title">품질검사 결과 · ${escapeHtml(record.ship_no||"-")} / BLK ${escapeHtml(record.blk_no||"-")}</div><div>${badge}${unread?' <span class="new-badge">NEW</span>':""}</div></div><div class="record-meta">공정: ${escapeHtml(record.process_step==="소조립"?"소조립 입고 확인 (입고 검사)":(record.process_step||"-"))} · ${Number(record.attempt_no||1)}차<br>작업자: ${escapeHtml(record.author_name||"-")} · 검사자: ${escapeHtml(record.quality_checked_name||"-")}<br>검사일시: ${escapeHtml(formatDateTime(record.quality_checked_at))}</div><div class="request-content-preview"><strong>종합 판정 의견</strong><br>${escapeHtml(record.quality_note||"-")}</div>${qualityChecklistReadOnlyHtml(record.quality_checklist)}`;
   if(unread){const actions=document.createElement("div");actions.className="request-actions";const btn=document.createElement("button");btn.className="success";btn.textContent="품질결과 확인 완료";btn.onclick=()=>markQualityResultRead(record);actions.appendChild(btn);card.appendChild(actions)}
   return card;
 }
@@ -2301,17 +2363,149 @@ HWDK 조립공정 BLK 순차관리 통합 패치
   .asm-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 </style>
+<style>
+/* ===== 대조립 · 중조립 · 소조립 입고 · 치공구 ===== */
+.asm-stage.other{background:#f6f8fa;border-style:dashed}
+.asm-stage.other .asm-stage-work:not(.done):not(.fail){background:#fbfcfd}
+.asm-current-sub{display:block;margin-top:4px;font-size:13px;font-weight:700;opacity:.9}
+.asm-goto-btn{display:inline-flex;margin:6px 0 0;padding:7px 11px;font-size:13px;background:#16324f;color:#fff;border-radius:7px}
+.asm-current-box.warn .asm-goto-btn{background:#8a5700}
+.asm-tree-box{padding:11px;border:1px solid #cbddea;border-radius:11px;background:#f5f9fc}
+.asm-tree-box.legacy{border-color:#e7cc7a;background:#fffaf0;color:#4d3b00;font-size:13px;line-height:1.6}
+.asm-tree-head{font-size:14px;font-weight:800;color:#16324f}
+.asm-tree-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.asm-tree-chip{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 11px;border:1px solid #cbd5df;border-radius:9px;background:#fff;color:#16324f;font-size:14px;font-weight:900;text-align:left}
+.asm-tree-chip small{font-size:11px;font-weight:700;color:#5d6975}
+.asm-tree-chip.grand{border-color:#16324f}
+.asm-tree-chip.pass{background:#eef9f3;border-color:#acd8bf}
+.asm-tree-chip.pending{background:#fffdf5;border-color:#e7cc7a}
+.asm-tree-chip.fail{background:#fff7f7;border-color:#e2aaaa}
+.asm-tree-chip.active{box-shadow:0 0 0 2px #16324f}
+.asm-tree-parts{margin-top:9px;font-size:13px;color:#334155;line-height:1.55}
+.asm-intake{display:grid;gap:8px;margin-top:4px}
+.asm-intake-sum{padding:9px 11px;border-radius:9px;background:#eef5fb;color:#16324f;font-weight:900;font-size:14px}
+.asm-intake-sum.ok{background:#e7f7ee;color:#125c3a}
+.asm-intake-sum.ng{background:#fff0f0;color:#a12b2b}
+.asm-intake-table{display:grid;gap:6px}
+.asm-intake-row{display:grid;grid-template-columns:minmax(100px,1fr) 78px minmax(130px,1fr) 150px minmax(140px,1.5fr);gap:8px;align-items:center;padding:8px 10px;border:1px solid #e0e6eb;border-radius:9px;background:#fff}
+.asm-intake-row input[type=date]:disabled{background:#f3f5f7;color:transparent}
+.asm-intake-row.head{padding:2px 10px;border:0;background:transparent;font-size:12px;font-weight:800;color:#687785}
+.asm-intake-row.arrived{background:#f3fbf6;border-color:#c7e6d3}
+.asm-intake-row.ng{background:#fff5f5;border-color:#e8b9b9}
+.asm-intake-row select,.asm-intake-row input{margin:0;padding:8px;font-size:15px}
+.asm-intake-no{font-weight:900;color:#16324f;overflow-wrap:anywhere}
+.asm-intake-check{display:flex;align-items:center;gap:6px;margin:0;font-weight:800;cursor:pointer}
+.asm-intake-check input{width:20px;height:20px;margin:0}
+.asm-intake-empty{padding:10px 12px;border-radius:9px;background:#f3f6f9;color:#334155;font-size:13px;line-height:1.6}
+.asm-intake-read{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.asm-intake-pill{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:800;background:#edf2f7;color:#334155}
+.asm-intake-pill.ok{background:#e7f7ee;color:#167148}
+.asm-intake-pill.ng{background:#fde8e8;color:#a12b2b}
+.asm-intake-pill.miss{background:#fff0c9;color:#8a5700}
+.asm-tools{display:grid;gap:8px;margin-top:4px}
+.asm-tools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.asm-tool{display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:8px;align-items:center;padding:7px 9px;border:1px solid #dde4e9;border-radius:9px;background:#fff}
+.asm-tool.on{background:#eef5fb;border-color:#9fbfd8}
+.asm-tool label{display:flex;align-items:center;gap:7px;margin:0;font-weight:800;font-size:14px;cursor:pointer;line-height:1.35}
+.asm-tool label input{width:20px;height:20px;margin:0;flex:0 0 auto}
+.asm-tool input[type=number]{margin:0;padding:7px;font-size:15px}
+.asm-tools-extra label{margin-top:8px}
+.asm-tools-recorded{padding:10px 12px;border:1px solid #b7dfc7;border-radius:10px;background:#f3fbf6;font-size:13px;line-height:1.6;color:#1f3b2c}
+.asm-tools-recorded.ng{border-color:#e7cc7a;background:#fffaf0;color:#4d3b00}
+.asm-tools-recorded-title{font-weight:900;margin-bottom:2px}
+.asm-tools-recorded-state{font-weight:800;margin-top:2px}
+.asm-tools-change{margin-top:0}
+.asm-log-detail{margin-top:7px;padding:8px 10px;border-radius:8px;background:#f3f6f9;font-size:13px;line-height:1.55;color:#334155;white-space:pre-wrap}
+.asm-log-detail.warn{background:#fff8e7;color:#5c4400}
+.asm-gate-tag{display:inline-flex;margin-left:4px;padding:2px 7px;border-radius:999px;background:#eef5fb;color:#16324f;font-size:11px;font-weight:800;vertical-align:middle}
+.asm-picker-sub{font-size:11px;color:#16324f;font-weight:700}
+.asm-picker-btn.ready{border-color:#9fbfd8;background:#f2f8fd}
+.asm-summary-total{font-size:14px;color:#687785;font-weight:800}
+.asm-grand{border-top:1px solid #e3e9ee;padding:10px 12px}
+.asm-grand-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(200px,2fr);gap:8px;align-items:stretch}
+.asm-grand-row .asm-blk-name{font-size:16px}
+.asm-mid-row{display:grid;grid-template-columns:minmax(130px,1fr) repeat(2,minmax(130px,1fr));gap:8px;margin:7px 0 0 18px;padding-left:10px;border-left:3px solid #dbe4ea;align-items:stretch}
+.asm-mid-name{font-weight:900;color:#243b53}
+.asm-dash-step.locked{background:#f1f3f5;color:#8a949e}
+.asm-dash-step.warn{background:#fff8e7;border-color:#e7cc7a}
+.asm-dash-step span{white-space:pre-line}
+.asm-dash-step.warn span{color:#8a5700;font-weight:700}
+.asm-legacy-title{padding:10px 12px 0;border-top:1px solid #e3e9ee;font-size:13px;font-weight:900;color:#5d6975}
+.asm-tool-short-list{display:grid;gap:6px;margin-bottom:8px}
+.asm-tool-short{display:grid;gap:2px;padding:8px 10px;border:1px solid #e7cc7a;border-radius:9px;background:#fff8e7;font-size:13px;color:#4d3b00}
+.asm-tool-usage{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.asm-tool-pill{display:inline-flex;gap:4px;padding:5px 9px;border-radius:999px;background:#eef5fb;color:#16324f;font-size:12px;font-weight:700}
+.asm-tree-card{border-top:1px solid #e3e9ee;padding:11px 12px}
+.asm-tree-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.asm-tree-card-actions{display:flex;gap:6px;flex:0 0 auto}
+.asm-tree-card-actions button{padding:8px 12px;font-size:13px}
+.asm-danger-text{color:#a12b2b}
+.asm-tree-mids{display:grid;gap:5px;margin-top:8px}
+.asm-tree-mid{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:6px 9px;border-radius:8px;background:#f8fafc;font-size:13px}
+.asm-tree-mid strong{color:#16324f}
+.asm-tree-mid span{color:#334155;overflow-wrap:anywhere}
+.asm-tree-mid em{font-style:normal;font-size:12px;color:#5d6975;white-space:nowrap}
+@media(max-width:900px){
+  .asm-grand-row{grid-template-columns:1fr}
+  .asm-mid-row{grid-template-columns:1fr;margin-left:8px}
+}
+@media(max-width:600px){
+  .asm-intake-row{grid-template-columns:1fr 86px}
+  .asm-intake-row.head{display:none}
+  .asm-intake-row select,.asm-intake-row input[data-f="eta"],.asm-intake-row input[data-f="note"]{grid-column:1/-1}
+  .asm-tools-grid{grid-template-columns:1fr}
+  .asm-tree-mid{grid-template-columns:1fr}
+  .asm-tree-card-head{flex-direction:column}
+}
+</style>
+
 <script>
 (() => {
   "use strict";
 
+  /* =========================================================
+     조립공정 구조
+     - 대조립 BLK(예: 805) = 최종 완성품. 여러 중조립 BLK(805R1 · 805R2 · 805M1)로 구성
+     - 중조립 BLK마다: ① 소조립 입고 확인 → 입고 검사 → ② 중조립 → 품질검사
+     - 구성 중조립이 모두 합격하면 대조립 BLK에서: ③ 대조립 → 최종 품질검사
+     - 블록 구성(assembly_block_tree)에 없는 BLK는 예전처럼 BLK 하나에서 ①②③을 진행합니다.
+     DB의 process_step 값은 그대로 "소조립" · "중조립" · "대조립"을 씁니다(화면 이름만 '소조립 입고 확인').
+     ========================================================= */
   const ASM_TABLE = "assembly_workflow";
+  const ASM_TREE_TABLE = "assembly_block_tree";
   const ASM_STEPS = ["소조립","중조립","대조립"];
-  let asmCurrentRows = [];
-  let asmCurrentState = null;
+  const ASM_MID_STEPS = ["소조립","중조립"];
+  const ASM_GRAND_STEPS = ["대조립"];
+  const ASM_STEP_TITLE = {"소조립":"소조립 입고 확인","중조립":"중조립","대조립":"대조립"};
+  const ASM_STEP_SHORT = {"소조립":"소조립 입고","중조립":"중조립","대조립":"대조립"};
+  const ASM_GATE_TITLE = {"소조립":"입고 검사","중조립":"품질검사","대조립":"최종 품질검사"};
+  const ASM_STEP_NO = {"소조립":"①","중조립":"②","대조립":"③"};
+  const asmStepTitle = (s) => ASM_STEP_TITLE[s] || s || "-";
+  const asmStepShort = (s) => ASM_STEP_SHORT[s] || s || "-";
+  const ASM_NO_RE = /^[A-Z0-9][A-Z0-9-]*$/;
+
+  /* 블록 작업 시작 전 필수 치공구 (중조립 · 대조립 공정의 차수별 첫 등록 때 기록) */
+  const ASM_TOOLS = [
+    {key:"jig",     name:"정반 · 지그(JIG)"},
+    {key:"pin_jig", name:"핀 지그 · 받침 서포트"},
+    {key:"dog",     name:"도그 피스 · 쐐기"},
+    {key:"clamp",   name:"클램프 · 스트롱백"},
+    {key:"chain",   name:"체인블록 · 레버블록"},
+    {key:"jack",    name:"턴버클 · 유압잭"},
+    {key:"measure", name:"레벨기 · 줄자 · 직각자"},
+    {key:"welder",  name:"용접기(CO2 · FCAW) · 예열기"},
+    {key:"grinder", name:"그라인더 · 가스 절단기"},
+    {key:"rigging", name:"인양 러그 · 샤클 · 와이어"}
+  ];
+
+  let asmCtx = null;            // 등록 화면의 BLK 문맥 {unit, rows, ownRows, family, state}
+  let asmCurrentRows = [];      // 지금 등록하는 BLK의 작업행
+  let asmCurrentState = null;   // 지금 등록하는 BLK의 공정상태
   let asmStateSeq = 0;
   let asmQualitySeq = 0;
   let asmDashboardSeq = 0;
+  let asmIntakeDraft = null;    // 소조립 입고 체크표 [{no, arrived, ok, note}]
+  let asmToolsMode = "none";    // "required"(이 차수 첫 등록) | "optional"(이미 기록됨) | "none"
 
   const asmE = (id) => document.getElementById(id);
   const asmEsc = (v) => {
@@ -2327,9 +2521,120 @@ HWDK 조립공정 BLK 순차관리 통합 패치
   const asmToday = () => typeof localToday === "function"
     ? localToday()
     : new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const asmNorm = (v) => String(v ?? "").trim().toUpperCase();
+  const asmShipKey = (v) => String(v ?? "").trim();
+  const asmNumSort = (a, b) => String(a).localeCompare(String(b), "ko", {numeric:true});
+  const asmByCreated = (a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")) || (Number(a.id || 0) - Number(b.id || 0));
 
+  /* ===== 블록 구성(대조립 → 중조립 → 소조립) ===== */
+  let asmTree = [];
+  let asmTreeAt = 0;
+  let asmTreeSeq = 0;
+  let asmTreeError = null;
+
+  function asmTreeRowNorm(r) {
+    return {
+      ...r,
+      ship_type: asmNorm(r.ship_type),
+      ship_no: asmShipKey(r.ship_no),
+      grand_no: asmNorm(r.grand_no),
+      mid_no: asmNorm(r.mid_no),
+      sort_order: Number(r.sort_order || 0),
+      small_parts: Array.isArray(r.small_parts) ? r.small_parts.map(asmNorm).filter(Boolean) : []
+    };
+  }
+
+  /* 블록 구성 테이블을 읽지 못하면(아직 DB에 없거나 네트워크 오류) 빈 구성으로 보고 예전 방식으로 동작합니다. */
+  async function asmLoadTree(force = false) {
+    if (!force && asmTreeAt && Date.now() - asmTreeAt < 30000) return asmTree;
+    const seq = ++asmTreeSeq;
+    try {
+      const build = () => supabase.from(ASM_TREE_TABLE).select("*")
+        .order("ship_no", {ascending:true}).order("grand_no", {ascending:true})
+        .order("sort_order", {ascending:true}).order("id", {ascending:true});
+      const {data, error} = typeof fetchAllRows === "function" ? await fetchAllRows(build) : await build().limit(1000);
+      if (error) throw error;
+      if (seq === asmTreeSeq) { asmTree = (data || []).map(asmTreeRowNorm); asmTreeAt = Date.now(); asmTreeError = null; }
+    } catch (e) {
+      if (seq === asmTreeSeq) { asmTreeError = e; asmTreeAt = 0; }
+    }
+    return asmTree;
+  }
+
+  function asmTreeMids(ship, grand) {
+    return asmTree
+      .filter(t => t.ship_no === ship && t.grand_no === grand)
+      .sort((a, b) => (a.sort_order - b.sort_order) || asmNumSort(a.mid_no, b.mid_no));
+  }
+
+  /* 호선 + BLK 번호가 블록 구성에서 대조립인지, 중조립인지, 미등록인지 판단합니다. */
+  function asmTreeUnit(ship, blk) {
+    ship = asmShipKey(ship); blk = asmNorm(blk);
+    if (!ship || !blk) return null;
+    const mids = asmTreeMids(ship, blk);
+    if (mids.length) return {kind:"grand", ship, blk, grand:blk, mids, steps:ASM_GRAND_STEPS, shipType:mids.find(m => m.ship_type)?.ship_type || ""};
+    const node = asmTree.find(t => t.ship_no === ship && t.mid_no === blk);
+    if (node) return {kind:"mid", ship, blk, grand:node.grand_no, node, parts:node.small_parts, mids:asmTreeMids(ship, node.grand_no), steps:ASM_MID_STEPS, shipType:node.ship_type || ""};
+    return {kind:"legacy", ship, blk, steps:ASM_STEPS, looksGrand:/^\d{3}$/.test(blk)};
+  }
+
+  function asmUnitBlks(unit) {
+    if (!unit) return [];
+    if (unit.kind === "legacy") return [unit.blk];
+    return [...unit.mids.map(m => m.mid_no), unit.grand];
+  }
+
+  function asmTreeRole(ship, blk) {
+    ship = asmShipKey(ship); blk = asmNorm(blk);
+    if (asmTree.some(t => t.ship_no === ship && t.grand_no === blk)) return {kind:"grand", grand:blk};
+    const node = asmTree.find(t => t.ship_no === ship && t.mid_no === blk);
+    if (node) return {kind:"mid", grand:node.grand_no};
+    return {kind:"legacy"};
+  }
+
+  /* ===== 공정 상태 계산 ===== */
   function asmRowsByStep(rows, step) {
     return (rows || []).filter(r => r.process_step === step);
+  }
+  function asmBlkRows(rows, blk) {
+    return (rows || []).filter(r => asmNorm(r.blk_no) === blk);
+  }
+
+  /* 소조립 입고 기록 요약: 입고율(입고 수 ÷ 필요 수), 미입고 · 불량 목록 */
+  function asmIntakeSummary(row) {
+    const d = row?.work_detail;
+    if (!d || !Array.isArray(d.intake)) return null;
+    const list = d.intake;
+    const total = list.length;
+    const arrived = list.filter(x => x.arrived).length;
+    const missing = list.filter(x => !x.arrived);
+    const defects = list.filter(x => x.arrived && x.ok === false);
+    return {total, arrived, issues:defects.length, pct: total ? Math.round(arrived / total * 100) : 0, missing, defects};
+  }
+
+  const asmMD = (d) => d ? `${String(d).slice(5, 7)}/${String(d).slice(8, 10)}` : "";
+  /* 미입고 · 불량 소조립 한 건의 조치 표시: 입고 예정 · 입고 지연 · 재입고 예정 · 보수(재작업) 요망 */
+  function asmPartIssueText(x, today = asmToday()) {
+    const late = x.eta && x.eta < today;
+    if (!x.arrived) return x.eta ? `${x.no} ${late ? `입고 지연(예정 ${asmMD(x.eta)})` : `입고 예정 ${asmMD(x.eta)}`}` : `${x.no} 미입고`;
+    if (x.action === "reinbound") return `${x.no} 불량 · ${x.eta ? (late ? `재입고 지연(예정 ${asmMD(x.eta)})` : `재입고 예정 ${asmMD(x.eta)}`) : "재입고 요망"}`;
+    return `${x.no} 불량 · 보수(재작업) 요망${x.eta ? ` ${asmMD(x.eta)}까지` : ""}`;
+  }
+  function asmIntakeLate(sum, today = asmToday()) {
+    return [...sum.missing, ...sum.defects].filter(x => x.eta && x.eta < today && (!x.arrived || x.action === "reinbound")).length;
+  }
+  /* "입고 67% (2/3) · 불량 1" */
+  function asmIntakeLine(sum) {
+    return `입고 ${sum.pct}% (${sum.arrived}/${sum.total})${sum.issues ? ` · 불량 ${sum.issues}` : ""}`;
+  }
+  /* 좁은 칸용: "입고 67% · 미입고 1 · 불량 1" */
+  function asmIntakeShort(sum) {
+    const parts = [`입고 ${sum.pct}%`];
+    if (sum.missing.length) parts.push(`미입고 ${sum.missing.length}`);
+    if (sum.issues) parts.push(`불량 ${sum.issues}`);
+    const late = asmIntakeLate(sum);
+    if (late) parts.push(`지연 ${late}`);
+    return parts.join(" · ");
   }
 
   function asmStepState(rows, step) {
@@ -2345,16 +2650,20 @@ HWDK 조립공정 BLK 순차관리 통합 패치
         quality:"합격",
         status:"완료",
         row:passed,
+        intake: step === "소조립" ? asmIntakeSummary(passed) : null,
         hasRows:all.length>0
       };
     }
 
     const maxAttempt = all.reduce((m,r) => Math.max(m, Number(r.attempt_no || 1)), 1);
-    const current = all.filter(r => Number(r.attempt_no || 1) === maxAttempt);
-    const progress = current.reduce((m,r) => Math.max(m, Number(r.progress_rate || 0)), 0);
-    const confirmed = current
-      .filter(r => r.process_confirmed)
-      .sort((a,b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+    const current = all.filter(r => Number(r.attempt_no || 1) === maxAttempt).sort(asmByCreated);
+    const latest = current[current.length - 1] || null;
+    const intake = step === "소조립" ? asmIntakeSummary(latest) : null;
+    /* 입고 체크표가 있으면 마지막 기록의 입고율이 공정률입니다(잘못 체크한 것을 바로잡을 수 있게). */
+    const progress = intake
+      ? Number(latest.progress_rate || 0)
+      : current.reduce((m,r) => Math.max(m, Number(r.progress_rate || 0)), 0);
+    const confirmed = current.filter(r => r.process_confirmed);
     const latestConfirmed = confirmed[confirmed.length - 1] || null;
     const quality = latestConfirmed?.quality_status || "미대상";
 
@@ -2369,51 +2678,108 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       progress,
       quality,
       status,
-      row:latestConfirmed || current[current.length - 1] || null,
+      row:latestConfirmed || latest,
+      intake,
       hasRows:all.length>0
     };
   }
 
-  function asmBuildState(rows) {
-    const steps = Object.fromEntries(ASM_STEPS.map(step => [step, asmStepState(rows, step)]));
+  /* steps 순서대로 아직 합격하지 않은 첫 공정이 지금 등록할 공정입니다.
+     opts.prereqBlocked: 대조립 BLK에서 구성 중조립이 아직 모두 합격하지 않은 경우 */
+  function asmBuildState(rows, steps = ASM_STEPS, opts = {}) {
+    const st = Object.fromEntries(steps.map(step => [step, asmStepState(rows, step)]));
     let currentStep = null;
-    for (const step of ASM_STEPS) {
-      if (!steps[step].passed) {
-        currentStep = step;
-        break;
-      }
+    for (const step of steps) {
+      if (!st[step].passed) { currentStep = step; break; }
     }
-    const current = currentStep ? steps[currentStep] : null;
-    const blockedByQuality = !!current && current.quality === "대기";
+    const current = currentStep ? st[currentStep] : null;
     const allPassed = !currentStep;
-    return {steps, currentStep, current, blockedByQuality, allPassed};
+    const blockedByQuality = !!current && current.quality === "대기";
+    const prereqBlocked = !!opts.prereqBlocked && !allPassed && !blockedByQuality;
+    return {steps:st, order:steps, currentStep, current, blockedByQuality, allPassed, prereqBlocked, prereqText:opts.prereqText || ""};
   }
 
-  /* ===== 공정 흐름 표시: 소조립 → 품질검사 → 중조립 → 품질검사 → 대조립 → 최종 품질검사 ===== */
-  const ASM_STEP_NO = {"소조립":"①","중조립":"②","대조립":"③"};
+  /* 대조립 BLK 하나와 구성 중조립 전체의 상태 */
+  function asmBuildFamily(ship, grand, mids, rows) {
+    const midStates = mids.map(m => {
+      const own = asmBlkRows(rows, m.mid_no);
+      return {node:m, blk:m.mid_no, rows:own, state:asmBuildState(own, ASM_MID_STEPS)};
+    });
+    const grandRows = asmBlkRows(rows, grand);
+    const total = midStates.length;
+    const midsPassed = midStates.filter(x => x.state.steps["중조립"].passed).length;
+    const intakePassed = midStates.filter(x => x.state.steps["소조립"].passed).length;
+    const ready = total > 0 && midsPassed === total;
+    const grandState = asmBuildState(grandRows, ASM_GRAND_STEPS, {
+      prereqBlocked: !ready,
+      prereqText: `구성 중조립 ${midsPassed}/${total} 합격`
+    });
+    const all = [...grandRows, ...midStates.flatMap(x => x.rows)];
+    const lastAt = all.reduce((m, r) => String(r.created_at || "") > m ? String(r.created_at || "") : m, "");
+    const lastWith = (key) => [...all].sort(asmByCreated).reverse().find(r => r[key])?.[key] || "";
+    return {
+      ship, grand, mids:midStates, grandRows, grandState, total, midsPassed, intakePassed, ready, lastAt,
+      ship_type: mids.find(m => m.ship_type)?.ship_type || lastWith("ship_type"),
+      area: lastWith("area")
+    };
+  }
+
+  function asmAggStage(midStates, step) {
+    const total = midStates.length;
+    const open = midStates.filter(x => !x.state.steps[step].passed);
+    return {
+      total,
+      passed: total - open.length,
+      pending: open.filter(x => x.state.steps[step].quality === "대기").length,
+      failed: open.filter(x => x.state.steps[step].quality === "불합격").length
+    };
+  }
 
   function asmCurrentAttempt(s) {
     if (!s) return 1;
     return s.quality === "불합격" ? Number(s.attempt || 1) + 1 : Number(s.attempt || 1);
   }
 
+  /* 목록 · 지표에 쓰는 한 줄 상태 */
+  function asmStateText(state, kind) {
+    if (state.allPassed) return kind === "mid" ? "중조립 합격" : "최종완료";
+    const step = state.currentStep, s = state.current;
+    if (s.quality === "대기") return `${ASM_GATE_TITLE[step]} 대기`;
+    if (s.quality === "불합격") return step === "소조립" ? "입고 불합격 · 보수 · 재입고 요망" : `${asmStepShort(step)} 재작업 필요`;
+    if (state.prereqBlocked) return state.prereqText || "선행 공정 대기";
+    if (step === "소조립") {
+      if (s.intake) return asmIntakeShort(s.intake);
+      return s.progress > 0 ? `입고 ${asmPct(s.progress)}` : "입고 대기";
+    }
+    if (s.progress > 0) return `${asmStepShort(step)} ${asmPct(s.progress)}`;
+    if (kind === "grand") return "대조립 시작 가능";
+    return `${asmStepShort(step)} 시작 전`;
+  }
+
   /* 한 공정의 "작업" 칸 상태 */
   function asmWorkInfo(state, step) {
     const s = state.steps[step];
-    const idx = ASM_STEPS.indexOf(step);
-    const locked = idx > 0 && !state.steps[ASM_STEPS[idx - 1]].passed;
-    if (s.passed || s.quality === "대기") return {cls:"done", text:"작업 완료 100%"};
-    if (locked) return {cls:"locked", text:"이전 공정 합격 후 시작"};
-    if (s.quality === "불합격") return {cls:"fail", text:`${asmCurrentAttempt(s)}차 재작업 필요`};
+    const order = state.order || ASM_STEPS;
+    const idx = order.indexOf(step);
+    const prevLocked = idx > 0 && !state.steps[order[idx - 1]].passed;
+    if (s.passed || s.quality === "대기") return {cls:"done", text: step === "소조립" ? `입고 100%${s.intake ? ` (${s.intake.arrived}/${s.intake.total})` : ""}` : "작업 완료 100%"};
+    if (prevLocked) return {cls:"locked", text: step === "중조립" ? "소조립 입고 검사 합격 후 시작" : "이전 공정 합격 후 시작"};
+    if (s.quality === "불합격") return {cls:"fail", text: step === "소조립" ? `보수 · 재입고 요망 → ${asmCurrentAttempt(s)}차 입고 확인` : `${asmCurrentAttempt(s)}차 재작업 필요`};
+    if (state.prereqBlocked && state.currentStep === step) return {cls:"locked", text:`${state.prereqText} · 모두 합격 후 시작`};
+    if (step === "소조립") {
+      if (s.intake) return {cls:"working", text:`${s.hadFailure ? `${s.attempt}차 재입고 · ` : ""}${asmIntakeLine(s.intake)}`};
+      if (s.progress > 0) return {cls:"working", text:`${s.hadFailure ? `${s.attempt}차 재입고 · ` : ""}입고 ${asmPct(s.progress)}`};
+      return {cls:"working", text: s.hadFailure ? `${s.attempt}차 입고 확인 등록 가능` : "입고 대기 · 등록 가능"};
+    }
     if (s.progress > 0) return {cls:"working", text:`${s.hadFailure ? `${s.attempt}차 재작업중` : "작업중"} ${asmPct(s.progress)}`};
     return {cls:"working", text: s.hadFailure ? `${s.attempt}차 재작업 등록 가능` : "등록 가능"};
   }
 
-  /* 한 공정 뒤의 "품질검사" 칸 상태 */
+  /* 한 공정 뒤의 검사 칸 상태 */
   function asmGateInfo(s) {
     if (s.passed) return {cls:"pass", text:`합격${s.attempt > 1 ? ` (${s.attempt}차)` : ""}`};
     if (s.quality === "대기") return {cls:"pending", text:"검사대기"};
-    if (s.quality === "불합격") return {cls:"fail", text:"불합격 → 재작업"};
+    if (s.quality === "불합격") return {cls:"fail", text: s.step === "소조립" ? "불합격 → 보수 · 재입고" : "불합격 → 재작업"};
     return {cls:"", text:"대기"};
   }
 
@@ -2438,7 +2804,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       items.forEach(it => {
         if (it.result !== "부적합") return;
         const key = it.key || it.label || "기타";
-        const known = ASM_QUALITY_ITEMS.find(x => x.key === key);
+        const known = [...ASM_QUALITY_ITEMS, ...ASM_INTAKE_ITEMS].find(x => x.key === key);
         const e = map.get(key) || {key, label: known?.label || it.label || key, count:0, lastAt:"", lastNote:"", lastWhere:"", steps:{}};
         e.count++;
         e.steps[r.process_step] = (e.steps[r.process_step] || 0) + 1;
@@ -2450,20 +2816,88 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     return {inspected, failed, items:[...map.values()].sort((a,b) => b.count - a.count || b.lastAt.localeCompare(a.lastAt))};
   }
 
+  /* 작업 기록(입고 · 치공구) 한 줄 요약 */
+  function asmDetailText(r) {
+    const d = r?.work_detail;
+    if (!d || typeof d !== "object") return "";
+    const lines = [];
+    if (Array.isArray(d.intake)) {
+      const sum = asmIntakeSummary(r);
+      lines.push(`소조립 ${asmIntakeLine(sum)}${sum.issues ? "" : " · 불량 없음"}`);
+      const todo = [...sum.missing, ...sum.defects];
+      if (todo.length) lines.push(`조치 필요: ${todo.map(x => asmPartIssueText(x) + (x.note ? ` (${x.note})` : "")).join(", ")}`);
+    }
+    if (Array.isArray(d.tools)) {
+      const list = d.tools.map(t => `${t.name}${t.qty ? ` ${t.qty}` : ""}`);
+      if (d.tools_other) list.push(d.tools_other);
+      lines.push(`치공구(${d.tools_stage === "change" ? "변경" : "작업 전"}): ${list.join(", ") || "-"}`);
+      lines.push(d.tools_ok ? "치공구 준비 완료" : `치공구 부족 · 이상${d.tools_note ? `: ${d.tools_note}` : ""}`);
+    }
+    return lines.join("\n");
+  }
+
+  function asmDetailHtml(r) {
+    const text = asmDetailText(r);
+    if (!text) return "";
+    const warn = r.work_detail?.tools_ok === false || Number(r.work_detail?.intake_issues || 0) > 0;
+    return `<div class="asm-log-detail${warn ? " warn" : ""}">${asmEsc(text)}</div>`;
+  }
+
+  /* ===== 일일작업등록: BLK 문맥 불러오기 ===== */
+  async function asmFetchRowsFor(ship, blks) {
+    if (!ship || !blks.length) return [];
+    const {data, error} = await supabase
+      .from(ASM_TABLE)
+      .select("*")
+      .eq("ship_no", ship)
+      .in("blk_no", blks)
+      .order("created_at", {ascending:true})
+      .order("id", {ascending:true});
+    if (error) throw error;
+    return data || [];
+  }
+
+  function asmMakeContext(unit, rows) {
+    const ownRows = asmBlkRows(rows, unit.blk);
+    let state, family = null;
+    if (unit.kind === "legacy") {
+      state = asmBuildState(ownRows, ASM_STEPS);
+    } else {
+      family = asmBuildFamily(unit.ship, unit.grand, unit.mids, rows);
+      state = unit.kind === "mid"
+        ? (family.mids.find(x => x.blk === unit.blk)?.state || asmBuildState(ownRows, ASM_MID_STEPS))
+        : family.grandState;
+    }
+    return {unit, rows, ownRows, family, state};
+  }
+
+  async function asmFetchContext(ship, blk, forceTree) {
+    await asmLoadTree(forceTree);
+    const unit = asmTreeUnit(ship, blk);
+    const rows = await asmFetchRowsFor(unit.ship, asmUnitBlks(unit));
+    return asmMakeContext(unit, rows);
+  }
+
+  function asmApplyContext(ctx) {
+    asmCtx = ctx;
+    asmCurrentRows = ctx ? ctx.ownRows : [];
+    asmCurrentState = ctx ? ctx.state : asmBuildState([], ASM_STEPS);
+  }
+
   /* 작업 전 확인 상자: ① 이번 재작업 대상(직전 불합격 사유) ② 이 공정에서 그동안 반복된 부적합 */
   function asmRenderCaution() {
     const box = asmE("asmCaution");
     if (!box) return;
     const state = asmCurrentState;
     const step = state?.currentStep;
-    if (!state || !step) { box.innerHTML = ""; box.classList.add("hidden"); return; }
+    if (!state || !step || state.prereqBlocked) { box.innerHTML = ""; box.classList.add("hidden"); return; }
 
     const parts = [];
     const failedRow = !state.current.passed && state.current.hadFailure ? asmLastFailedRow(asmCurrentRows, step) : null;
     if (failedRow) {
       const ng = (Array.isArray(failedRow.quality_checklist?.items) ? failedRow.quality_checklist.items : []).filter(it => it.result === "부적합");
       parts.push(`<div class="asm-caution-block fail">
-        <div class="asm-caution-title">이번 재작업에서 고칠 내용 · ${asmEsc(step)} ${Number(failedRow.attempt_no || 1)}차 검사 불합격</div>
+        <div class="asm-caution-title">이번 재작업에서 고칠 내용 · ${asmEsc(asmStepTitle(step))} ${Number(failedRow.attempt_no || 1)}차 ${asmEsc(ASM_GATE_TITLE[step])} 불합격</div>
         ${ng.length ? `<ul class="asm-caution-list">${ng.map(it => `<li><strong>${asmEsc(it.label || it.key || "-")}</strong>${it.note ? ` — ${asmEsc(it.note)}` : ""}</li>`).join("")}</ul>` : ""}
         ${failedRow.quality_note ? `<div class="asm-caution-note">검사자 의견: ${asmEsc(failedRow.quality_note)}</div>` : ""}
         <div class="asm-caution-meta">검사자 ${asmEsc(failedRow.quality_checked_name || "-")} · ${asmEsc(asmDate(failedRow.quality_checked_at))}</div>
@@ -2473,14 +2907,101 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const stats = asmDefectStats(asmAllRows, step);
     if (stats.items.length) {
       parts.push(`<div class="asm-caution-block">
-        <div class="asm-caution-title">작업 전 확인 · ${asmEsc(step)}에서 그동안 나온 부적합</div>
-        <div class="asm-caution-meta">전체 BLK 기준 ${asmEsc(step)} 검사 ${stats.inspected}건 중 불합격 ${stats.failed}건</div>
+        <div class="asm-caution-title">작업 전 확인 · ${asmEsc(asmStepTitle(step))}에서 그동안 나온 부적합</div>
+        <div class="asm-caution-meta">전체 BLK 기준 ${asmEsc(ASM_GATE_TITLE[step])} ${stats.inspected}건 중 불합격 ${stats.failed}건</div>
         <ul class="asm-caution-list">${stats.items.slice(0,3).map(it => `<li><strong>${asmEsc(it.label)}</strong> · ${it.count}건${it.lastNote ? ` — 최근: ${asmEsc(it.lastNote)} (${asmEsc(it.lastWhere)})` : ""}</li>`).join("")}</ul>
       </div>`);
     }
 
     box.innerHTML = parts.join("");
     box.classList.toggle("hidden", !parts.length);
+  }
+
+  /* ===== 공정 흐름: ① 소조립 입고 확인 → 입고 검사 → ② 중조립 → 품질검사 → ③ 대조립 → 최종 품질검사 ===== */
+  function asmStageVM(state, step) {
+    const s = state.steps[step];
+    const work = asmWorkInfo(state, step);
+    const gate = asmGateInfo(s);
+    return {
+      name:`${ASM_STEP_NO[step]} ${asmStepTitle(step)}`,
+      workCls:work.cls, workText:work.text,
+      meta: s.hasRows ? `최근 ${s.attempt}차${s.hadFailure ? " · 재작업 이력 있음" : ""}` : "",
+      gateName:ASM_GATE_TITLE[step], gateCls:gate.cls, gateText:gate.text,
+      current: state.currentStep === step && !state.prereqBlocked,
+      passed: s.passed, other:false
+    };
+  }
+
+  /* 구성 중조립 전체를 묶어 보여 주는 칸(대조립 BLK 화면의 ① · ②) */
+  function asmAggStageVM(family, step) {
+    const a = asmAggStage(family.mids, step);
+    const all = a.total > 0 && a.passed === a.total;
+    const work = all
+      ? {cls:"done", text:`중조립 ${a.total}개 모두 합격`}
+      : {cls: a.failed ? "fail" : "working", text:`${ASM_GATE_TITLE[step]} 합격 ${a.passed}/${a.total}`};
+    const gate = all ? {cls:"pass", text:`합격 ${a.passed}/${a.total}`}
+      : a.pending ? {cls:"pending", text:`검사대기 ${a.pending}건`}
+      : a.failed ? {cls:"fail", text:`불합격 ${a.failed}건`}
+      : {cls:"", text:`합격 ${a.passed}/${a.total}`};
+    return {
+      name:`${ASM_STEP_NO[step]} ${asmStepTitle(step)}`,
+      workCls:work.cls, workText:work.text, meta:"구성 중조립 BLK에서 등록",
+      gateName:ASM_GATE_TITLE[step], gateCls:gate.cls, gateText:gate.text,
+      current:false, passed:all, other:true
+    };
+  }
+
+  /* 대조립 칸(중조립 BLK 화면의 ③) */
+  function asmGrandStageVM(family) {
+    const s = family.grandState.steps["대조립"];
+    const gate = asmGateInfo(s);
+    let workCls = "working", workText;
+    if (s.passed || s.quality === "대기") { workCls = "done"; workText = "대조립 작업 완료 100%"; }
+    else if (!family.ready) { workCls = "locked"; workText = `구성 중조립 ${family.midsPassed}/${family.total} 합격 · 모두 합격 후 시작`; }
+    else if (s.quality === "불합격") { workCls = "fail"; workText = `${asmCurrentAttempt(s)}차 재작업 필요`; }
+    else if (s.progress > 0) workText = `작업중 ${asmPct(s.progress)}`;
+    else workText = "대조립 시작 가능";
+    return {
+      name:"③ 대조립", workCls, workText, meta:`대조립 BLK ${family.grand}에서 등록`,
+      gateName:"최종 품질검사", gateCls:gate.cls, gateText:gate.text,
+      current:false, passed:s.passed, other:true
+    };
+  }
+
+  function asmStageHtml(vm) {
+    return `<div class="asm-stage${vm.current ? " current" : ""}${vm.passed ? " passed" : ""}${vm.other ? " other" : ""}">
+      <div class="asm-stage-work ${vm.workCls}">
+        <div class="asm-stage-name">${asmEsc(vm.name)}</div>
+        <div class="asm-stage-text">${asmEsc(vm.workText)}</div>
+        ${vm.meta ? `<div class="asm-stage-meta">${asmEsc(vm.meta)}</div>` : ""}
+      </div>
+      <div class="asm-stage-gate ${vm.gateCls}">
+        <span class="asm-stage-gate-name">${asmEsc(vm.gateName)}</span>
+        <span class="asm-stage-gate-text">${asmEsc(vm.gateText)}</span>
+      </div>
+    </div>`;
+  }
+
+  function asmGotoButton(blk, text) {
+    return `<button type="button" class="asm-goto-btn" data-asm-goto="${asmEsc(blk)}">${asmEsc(text)}</button>`;
+  }
+
+  function asmBindGoto(root) {
+    root?.querySelectorAll("[data-asm-goto]").forEach(btn => {
+      btn.onclick = () => {
+        asmE("asmBlkNo").value = btn.dataset.asmGoto;
+        asmLoadState();
+        asmE("asmBlkNo").scrollIntoView?.({block:"center", behavior:"smooth"});
+      };
+    });
+  }
+
+  /* 미입고 · 미합격 중조립 목록(대조립 시작 조건 설명용) */
+  function asmFamilyWaitingText(family) {
+    return family.mids
+      .filter(x => !x.state.steps["중조립"].passed)
+      .map(x => `${x.blk} ${asmStateText(x.state, "mid")}`)
+      .join(", ");
   }
 
   function asmRenderFlow() {
@@ -2491,32 +3012,23 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const progress = asmE("asmProgress");
     if (!flow || !box) return;
 
-    const state = asmCurrentState || asmBuildState([]);
-    flow.innerHTML = ASM_STEPS.map((step, i) => {
-      const s = state.steps[step];
-      const work = asmWorkInfo(state, step);
-      const gate = asmGateInfo(s);
-      const current = state.currentStep === step ? " current" : "";
-      return `<div class="asm-stage${current}${s.passed ? " passed" : ""}">
-        <div class="asm-stage-work ${work.cls}">
-          <div class="asm-stage-name">${ASM_STEP_NO[step]} ${step}</div>
-          <div class="asm-stage-text">${asmEsc(work.text)}</div>
-          ${s.hasRows ? `<div class="asm-stage-meta">최근 ${s.attempt}차${s.hadFailure ? " · 재작업 이력 있음" : ""}</div>` : ""}
-        </div>
-        <div class="asm-stage-gate ${gate.cls}">
-          <span class="asm-stage-gate-name">${i === ASM_STEPS.length - 1 ? "최종 품질검사" : "품질검사"}</span>
-          <span class="asm-stage-gate-text">${asmEsc(gate.text)}</span>
-        </div>
-      </div>`;
-    }).join("");
+    const ctx = asmCtx;
+    const unit = ctx?.unit;
+    const state = asmCurrentState || asmBuildState([], ASM_STEPS);
+    let vms;
+    if (unit?.kind === "mid") vms = [asmStageVM(state, "소조립"), asmStageVM(state, "중조립"), asmGrandStageVM(ctx.family)];
+    else if (unit?.kind === "grand") vms = [asmAggStageVM(ctx.family, "소조립"), asmAggStageVM(ctx.family, "중조립"), asmStageVM(state, "대조립")];
+    else vms = ASM_STEPS.map(step => asmStageVM(state, step));
+    flow.innerHTML = vms.map(asmStageHtml).join("");
 
     const stepLabel = asmE("asmStepLabel");
     box.className = "asm-current-box";
     asmRenderCaution();
 
-    const lock = (text, cls) => {
+    const lock = (html, cls) => {
       if (cls) box.classList.add(cls);
-      box.textContent = text;
+      box.innerHTML = html;
+      asmBindGoto(box);
       if (stepLabel) stepLabel.textContent = "-";
       if (saveBtn) saveBtn.disabled = true;
       if (confirm) confirm.disabled = true;
@@ -2524,22 +3036,42 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     };
 
     if (state.allPassed) {
-      lock("이 BLK는 소조립 · 중조립 · 대조립과 최종 품질검사까지 모두 끝났습니다.", "done");
+      if (unit?.kind === "mid") {
+        lock(`이 중조립 BLK는 소조립 입고 검사와 중조립 품질검사를 모두 합격했습니다. 대조립은 대조립 BLK <strong>${asmEsc(unit.grand)}</strong>에서 등록합니다. ${asmGotoButton(unit.grand, `대조립 ${unit.grand} 열기`)}`, "done");
+      } else if (unit?.kind === "grand") {
+        lock(`대조립 ${asmEsc(unit.grand)}은(는) 구성 중조립 ${ctx.family.total}개와 대조립 · 최종 품질검사까지 모두 끝났습니다.`, "done");
+      } else {
+        lock("이 BLK는 소조립 입고 확인 · 중조립 · 대조립과 최종 품질검사까지 모두 끝났습니다.", "done");
+      }
       return;
     }
 
+    const step = state.currentStep;
     const s = state.current;
     if (state.blockedByQuality) {
-      lock(`${state.currentStep} 완료확인이 끝나 품질검사를 기다리는 중입니다. 합격하면 ${ASM_STEPS[ASM_STEPS.indexOf(state.currentStep) + 1] || "BLK 완료"}(으)로 넘어갑니다.`, "warn");
+      let next;
+      if (unit?.kind === "mid") next = step === "소조립" ? "중조립" : `대조립(대조립 BLK ${unit.grand}) 대기`;
+      else if (unit?.kind === "grand") next = "BLK 완료";
+      else next = ASM_STEPS[ASM_STEPS.indexOf(step) + 1] || "BLK 완료";
+      lock(asmEsc(`${asmStepTitle(step)} 완료확인이 끝나 ${ASM_GATE_TITLE[step]}를 기다리는 중입니다. 합격하면 ${next}(으)로 넘어갑니다.`), "warn");
       return;
     }
 
-    if (stepLabel) stepLabel.textContent = `${state.currentStep} · ${asmCurrentAttempt(s)}차`;
+    if (state.prereqBlocked) {
+      const waiting = ctx?.family ? asmFamilyWaitingText(ctx.family) : "";
+      const first = ctx?.family?.mids.find(x => !x.state.steps["중조립"].passed);
+      lock(`구성 중조립이 모두 품질검사에 합격해야 대조립을 시작할 수 있습니다. (${asmEsc(state.prereqText)})${waiting ? `<br><span class="asm-current-sub">남은 중조립: ${asmEsc(waiting)}</span>` : ""}${first ? ` ${asmGotoButton(first.blk, `${first.blk} 열기`)}` : ""}`, "warn");
+      return;
+    }
+
+    if (stepLabel) stepLabel.textContent = `${asmStepTitle(step)} · ${asmCurrentAttempt(s)}차`;
     if (s.quality === "불합격") {
       box.classList.add("fail");
-      box.textContent = `${state.currentStep} 품질검사 불합격입니다. ${asmCurrentAttempt(s)}차 재작업을 등록한 뒤 다시 100% 완료확인하여 재검사를 받아야 합니다.`;
+      box.textContent = step === "소조립"
+        ? `소조립 입고 검사 불합격입니다. ${asmCurrentAttempt(s)}차 재작업(이상 소조립 보수 · 재입고)을 등록한 뒤 다시 100% 완료확인하여 재검사를 받아야 합니다.`
+        : `${asmStepTitle(step)} ${ASM_GATE_TITLE[step]} 불합격입니다. ${asmCurrentAttempt(s)}차 재작업을 등록한 뒤 다시 100% 완료확인하여 재검사를 받아야 합니다.`;
     } else {
-      box.textContent = `지금 등록되는 공정: ${state.currentStep} · ${asmCurrentAttempt(s)}차 작업 (공정은 순서대로 자동 지정됩니다)`;
+      box.textContent = `지금 등록되는 공정: ${asmStepTitle(step)} · ${asmCurrentAttempt(s)}차 (공정은 순서대로 자동 지정됩니다)`;
     }
 
     if (saveBtn) saveBtn.disabled = false;
@@ -2547,17 +3079,290 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     if (progress) progress.disabled = false;
   }
 
-  async function asmFetchBlockRows(shipNo, blkNo) {
-    if (!shipNo || !blkNo) return [];
-    const {data,error} = await supabase
-      .from(ASM_TABLE)
-      .select("*")
-      .eq("ship_no", shipNo.trim())
-      .eq("blk_no", blkNo.trim().toUpperCase())
-      .order("created_at", {ascending:true})
-      .order("id", {ascending:true});
-    if (error) throw error;
-    return data || [];
+  /* 대조립 · 중조립 구성 칩: 눌러서 같은 대조립의 다른 BLK로 이동 */
+  function asmChipCls(state) {
+    if (state.allPassed) return "pass";
+    if (state.current.quality === "대기") return "pending";
+    if (state.current.quality === "불합격") return "fail";
+    return "";
+  }
+
+  function asmRenderTreeBox() {
+    const box = asmE("asmTreeBox");
+    if (!box) return;
+    const ctx = asmCtx, unit = ctx?.unit;
+    if (!unit) { box.innerHTML = ""; box.className = "asm-tree-box hidden"; return; }
+    if (unit.kind === "legacy") {
+      box.className = "asm-tree-box legacy";
+      box.innerHTML = unit.looksGrand
+        ? `<strong>블록 구성에 없는 BLK입니다.</strong> 대조립 BLK라면 <strong>블록 구성</strong> 탭에서 구성 중조립과 소조립을 먼저 등록하세요. 그대로 등록하면 이 BLK 하나에서 소조립 입고 확인 → 중조립 → 대조립을 진행합니다.`
+        : `블록 구성에 없는 BLK입니다. 이 BLK 하나에서 소조립 입고 확인 → 중조립 → 대조립을 진행합니다. <span class="hint">블록 구성 탭에 등록하면 소조립 입고 체크표와 대조립 시작 조건이 자동으로 관리됩니다.</span>`;
+      return;
+    }
+    const f = ctx.family;
+    const g = f.grandState;
+    const chips = [
+      `<button type="button" class="asm-tree-chip grand ${asmChipCls(g)}${unit.blk === f.grand ? " active" : ""}" data-asm-goto="${asmEsc(f.grand)}">
+        <span>대조립 ${asmEsc(f.grand)}</span><small>${asmEsc(asmStateText(g, "grand"))}</small></button>`,
+      ...f.mids.map(x => `<button type="button" class="asm-tree-chip ${asmChipCls(x.state)}${unit.blk === x.blk ? " active" : ""}" data-asm-goto="${asmEsc(x.blk)}">
+        <span>${asmEsc(x.blk)}</span><small>${asmEsc(asmStateText(x.state, "mid"))}</small></button>`)
+    ];
+    box.className = "asm-tree-box";
+    box.innerHTML = `<div class="asm-tree-head">대조립 <strong>${asmEsc(f.grand)}</strong> · 구성 중조립 ${f.total}개 · 중조립 합격 ${f.midsPassed}/${f.total} <span class="hint">· 눌러서 이동</span></div>
+      <div class="asm-tree-chips">${chips.join("")}</div>
+      ${unit.kind === "mid" ? `<div class="asm-tree-parts">이 중조립의 소조립 ${unit.parts.length}개: ${unit.parts.length ? asmEsc(unit.parts.join(", ")) : "블록 구성에 소조립 번호 없음"}</div>` : ""}`;
+    asmBindGoto(box);
+  }
+
+  /* ===== 소조립 입고 체크표 ===== */
+  function asmLatestDetailRow(rows, step, key) {
+    return asmRowsByStep(rows, step)
+      .filter(r => r.work_detail && Array.isArray(r.work_detail[key]))
+      .sort(asmByCreated)
+      .pop() || null;
+  }
+
+  function asmIntakeCalc() {
+    const d = asmIntakeDraft || [];
+    const arrived = d.filter(x => x.arrived).length;
+    const issues = d.filter(x => x.arrived && x.ok === false).length;
+    return {total:d.length, arrived, missing:d.length - arrived, issues, progress: d.length ? Math.round(arrived / d.length * 100) : 0, complete: d.length > 0 && arrived === d.length && !issues};
+  }
+
+  function asmIntakeSync() {
+    if (!asmIntakeDraft) return;
+    const c = asmIntakeCalc();
+    const prog = asmE("asmProgress");
+    prog.value = c.progress;
+    prog.readOnly = true;
+    if (!c.complete) asmE("asmConfirm").checked = false;
+    const sum = asmE("asmIntakeSum");
+    if (sum) {
+      sum.className = `asm-intake-sum${c.complete ? " ok" : c.issues ? " ng" : ""}`;
+      sum.textContent = `입고율 ${c.progress}% (${c.arrived}/${c.total})${c.missing ? ` · 미입고 ${c.missing}` : ""}${c.issues ? ` · 불량 ${c.issues}` : ""}${c.complete ? " · 모두 입고 · 이상 없음 → 완료확인 가능" : ""}`;
+    }
+    asmE("asmIntakeBox")?.querySelectorAll(".asm-intake-row[data-i]").forEach(row => {
+      const x = asmIntakeDraft[Number(row.dataset.i)];
+      const sel = row.querySelector('[data-f="state"]'), eta = row.querySelector('[data-f="eta"]');
+      if (sel) sel.disabled = !x.arrived;
+      const needEta = !x.arrived || x.ok === false;
+      if (eta) {
+        eta.disabled = !needEta;
+        eta.title = !x.arrived ? "입고 예정일" : x.action === "reinbound" ? "재입고 예정일" : "보수 완료 예정일";
+        if (!needEta) { eta.value = ""; x.eta = ""; }
+      }
+      row.classList.toggle("arrived", !!x.arrived);
+      row.classList.toggle("ng", !!x.arrived && x.ok === false);
+    });
+  }
+
+  function asmRenderIntake() {
+    const wrap = asmE("asmIntakeWrap"), box = asmE("asmIntakeBox");
+    if (!wrap || !box) return;
+    const state = asmCurrentState, unit = asmCtx?.unit;
+    const show = !!state && !!unit && state.currentStep === "소조립" && !state.blockedByQuality && !state.allPassed;
+    wrap.classList.toggle("hidden", !show);
+    asmIntakeDraft = null;
+    if (!show) { box.innerHTML = ""; return; }
+
+    const parts = unit.kind === "mid" ? unit.parts : [];
+    if (!parts.length) {
+      box.innerHTML = `<div class="asm-intake-empty">${unit.kind === "mid" ? "블록 구성에 이 중조립의 소조립 번호가 없습니다." : "블록 구성에 등록되지 않은 BLK입니다."} 입고 내용은 '오늘 작업내용'에 적고 입고율(%)을 직접 입력하세요. <span class="hint">블록 구성 탭에서 소조립 번호를 등록하면 입고 체크표로 관리됩니다.</span></div>`;
+      return;
+    }
+
+    /* 직전 기록(같은 공정의 가장 최근 입고 체크표)을 불러와 이어서 체크합니다. */
+    const prev = asmLatestDetailRow(asmCurrentRows, "소조립", "intake");
+    const prevMap = new Map((prev?.work_detail?.intake || []).map(x => [asmNorm(x.no), x]));
+    asmIntakeDraft = parts.map(no => {
+      const p = prevMap.get(no);
+      const arrived = !!p?.arrived, ok = arrived ? p.ok !== false : true;
+      return {no, arrived, ok, action: arrived && !ok ? (p.action === "reinbound" ? "reinbound" : "repair") : "", eta: String(p?.eta || ""), note: String(p?.note || "")};
+    });
+    const stateOf = (x) => !x.arrived || x.ok ? "ok" : x.action;
+
+    box.innerHTML = `
+      <div id="asmIntakeSum" class="asm-intake-sum"></div>
+      <div class="asm-intake-table">
+        <div class="asm-intake-row head"><span>소조립 번호</span><span>입고</span><span>상태 · 조치</span><span>예정일</span><span>불량 내용 · 비고</span></div>
+        ${asmIntakeDraft.map((x, i) => `<div class="asm-intake-row" data-i="${i}">
+          <span class="asm-intake-no">${asmEsc(x.no)}</span>
+          <label class="asm-intake-check"><input type="checkbox" data-f="arrived"${x.arrived ? " checked" : ""}> 입고</label>
+          <select data-f="state" aria-label="${asmEsc(x.no)} 상태">
+            <option value="ok"${stateOf(x) === "ok" ? " selected" : ""}>이상 없음</option>
+            <option value="reinbound"${stateOf(x) === "reinbound" ? " selected" : ""}>불량 · 재입고</option>
+            <option value="repair"${stateOf(x) === "repair" ? " selected" : ""}>불량 · 보수(재작업)</option>
+          </select>
+          <input type="date" data-f="eta" value="${asmEsc(x.eta)}" aria-label="${asmEsc(x.no)} 예정일">
+          <input data-f="note" value="${asmEsc(x.note)}" placeholder="불량 내용 · 출하 상황 등">
+        </div>`).join("")}
+      </div>
+      <div class="hint">미입고 소조립은 <strong>입고 예정일</strong>을, 불량은 <strong>재입고</strong>(반송 후 다시 입고) 또는 <strong>보수(재작업)</strong>를 고르고 예정일과 내용을 적습니다. 생산통합지표에 '입고 예정 · 재입고 예정 · 보수 요망 · 입고 지연'으로 표시됩니다.</div>
+      <div class="asm-actions"><button id="asmIntakeAll" type="button" class="secondary">전체 입고 · 이상 없음으로 표시</button></div>
+      ${prev ? `<div class="hint">직전 기록(${asmEsc(asmDate(prev.work_date))} · ${asmEsc(prev.author_name || "-")})을 불러왔습니다. 오늘 입고된 소조립을 추가로 체크하세요.</div>` : ""}`;
+
+    box.querySelectorAll(".asm-intake-row[data-i]").forEach(row => {
+      const x = asmIntakeDraft[Number(row.dataset.i)];
+      row.querySelector('[data-f="arrived"]').addEventListener("change", e => {
+        x.arrived = e.target.checked;
+        if (!x.arrived) { x.ok = true; x.action = ""; row.querySelector('[data-f="state"]').value = "ok"; }
+        else if (x.ok) { x.eta = ""; row.querySelector('[data-f="eta"]').value = ""; }
+        asmIntakeSync();
+      });
+      row.querySelector('[data-f="state"]').addEventListener("change", e => { const v = e.target.value; x.ok = v === "ok"; x.action = v === "ok" ? "" : v; asmIntakeSync(); });
+      row.querySelector('[data-f="eta"]').addEventListener("change", e => { x.eta = e.target.value; });
+      row.querySelector('[data-f="note"]').addEventListener("input", e => { x.note = e.target.value; });
+    });
+    asmE("asmIntakeAll").onclick = () => {
+      asmIntakeDraft.forEach(x => { x.arrived = true; x.ok = true; x.action = ""; x.eta = ""; });
+      box.querySelectorAll('[data-f="arrived"]').forEach(c => { c.checked = true; });
+      box.querySelectorAll('[data-f="state"]').forEach(s => { s.value = "ok"; });
+      box.querySelectorAll('[data-f="eta"]').forEach(s => { s.value = ""; });
+      asmIntakeSync();
+    };
+    asmIntakeSync();
+  }
+
+  function asmCollectIntake() {
+    if (!asmIntakeDraft) return {detail:null};
+    const noNote = asmIntakeDraft.find(x => x.arrived && x.ok === false && !String(x.note || "").trim());
+    if (noNote) return {error:`불량 소조립의 내용을 적으세요: ${noNote.no}`};
+    const c = asmIntakeCalc();
+    return {
+      detail: {
+        intake: asmIntakeDraft.map(x => {
+          const bad = x.arrived && x.ok === false;
+          return {no:x.no, arrived:!!x.arrived, ok: x.arrived ? !bad : null, action: bad ? (x.action || "repair") : "", eta: (!x.arrived || bad) ? String(x.eta || "") : "", note:String(x.note || "").trim()};
+        }),
+        intake_total: c.total,
+        intake_arrived: c.arrived,
+        intake_issues: c.issues
+      },
+      progress: c.progress,
+      complete: c.complete
+    };
+  }
+
+  /* ===== 작업 전 필수 치공구 ===== */
+  function asmToolsSummaryHtml(row) {
+    const d = row.work_detail;
+    const list = (d.tools || []).map(t => `${t.name}${t.qty ? ` ${t.qty}` : ""}`);
+    if (d.tools_other) list.push(d.tools_other);
+    return `<div class="asm-tools-recorded${d.tools_ok ? "" : " ng"}">
+      <div class="asm-tools-recorded-title">${d.tools_stage === "change" ? "최근 변경 기록" : "작업 시작 전 기록"} · ${asmEsc(asmDate(row.work_date))} · ${asmEsc(row.author_name || "-")}</div>
+      <div>${asmEsc(list.join(", ") || "-")}</div>
+      <div class="asm-tools-recorded-state">${d.tools_ok ? "준비 완료" : `부족 · 이상${d.tools_note ? `: ${asmEsc(d.tools_note)}` : ""}`}</div>
+    </div>`;
+  }
+
+  function asmRenderTools() {
+    const wrap = asmE("asmToolsWrap"), box = asmE("asmToolsBox"), hint = asmE("asmToolsHint");
+    if (!wrap || !box) return;
+    const state = asmCurrentState;
+    const step = state?.currentStep;
+    const show = !!state && !!asmCtx && (step === "중조립" || step === "대조립") && !state.blockedByQuality && !state.allPassed && !state.prereqBlocked;
+    wrap.classList.toggle("hidden", !show);
+    if (!show) { asmToolsMode = "none"; box.innerHTML = ""; if (hint) hint.textContent = ""; return; }
+
+    const attempt = asmCurrentAttempt(state.current);
+    const stepRows = asmRowsByStep(asmCurrentRows, step).filter(r => r.work_detail && Array.isArray(r.work_detail.tools)).sort(asmByCreated);
+    const recorded = [...stepRows].reverse().find(r => Number(r.attempt_no || 1) === attempt) || null;
+    const src = recorded || stepRows[stepRows.length - 1] || null;
+    asmToolsMode = recorded ? "optional" : "required";
+
+    if (hint) {
+      hint.textContent = recorded
+        ? `${asmStepTitle(step)} ${attempt}차 작업 시작 전 치공구가 기록되어 있습니다. 바뀐 치공구가 있을 때만 아래에서 변경 기록을 남기세요.`
+        : `${asmStepTitle(step)} ${attempt}차 작업을 시작하기 전에 필수 치공구 준비 상태를 기록해야 등록됩니다. 사용할 치공구를 체크하고 수량을 적으세요.${src ? " 이전 차수 기록을 불러왔으니 확인 후 고치세요." : ""}`;
+    }
+
+    const prevTools = new Map((src?.work_detail?.tools || []).map(t => [t.key, t]));
+    const editor = `
+      <div class="asm-tools-grid">${ASM_TOOLS.map(t => {
+        const p = prevTools.get(t.key);
+        return `<div class="asm-tool${p ? " on" : ""}">
+          <label><input type="checkbox" data-tool="${t.key}"${p ? " checked" : ""}> <span>${asmEsc(t.name)}</span></label>
+          <input type="number" min="1" step="1" data-qty="${t.key}" value="${p?.qty ? Number(p.qty) : ""}" placeholder="수량" aria-label="${asmEsc(t.name)} 수량">
+        </div>`;
+      }).join("")}</div>
+      <div class="asm-form-grid asm-tools-extra">
+        <div class="wide"><label>기타 치공구</label><input id="asmToolsOther" value="${asmEsc(src?.work_detail?.tools_other || "")}" placeholder="예: 전용 받침대 2, 이동식 비계 1식"></div>
+        <div><label>준비 상태</label><select id="asmToolsOk">
+          <option value="">선택</option>
+          <option value="1"${src && src.work_detail.tools_ok ? " selected" : ""}>준비 완료</option>
+          <option value="0"${src && src.work_detail.tools_ok === false ? " selected" : ""}>일부 부족 · 이상</option>
+        </select></div>
+        <div><label>부족 · 이상 내용</label><input id="asmToolsNote" value="${asmEsc(src?.work_detail?.tools_note || "")}" placeholder="부족하거나 점검이 필요한 치공구"></div>
+      </div>`;
+
+    box.innerHTML = recorded
+      ? `${asmToolsSummaryHtml(recorded)}
+         <label class="asm-check-row asm-tools-change"><input id="asmToolsChange" type="checkbox"> <span><strong>치공구 변경 · 추가 기록</strong><br><span class="hint">작업 중 치공구가 바뀌었거나 부족해졌을 때 체크하고 다시 기록합니다.</span></span></label>
+         <div id="asmToolsEditor" class="hidden">${editor}</div>`
+      : `<div id="asmToolsEditor">${editor}</div>`;
+
+    box.querySelectorAll("[data-tool]").forEach(c => {
+      c.addEventListener("change", () => {
+        const qty = box.querySelector(`[data-qty="${c.dataset.tool}"]`);
+        if (c.checked && qty && !qty.value) qty.value = "1";
+        c.closest(".asm-tool")?.classList.toggle("on", c.checked);
+      });
+    });
+    box.querySelectorAll("[data-qty]").forEach(q => {
+      q.addEventListener("input", () => {
+        const c = box.querySelector(`[data-tool="${q.dataset.qty}"]`);
+        if (c && Number(q.value) > 0 && !c.checked) { c.checked = true; c.closest(".asm-tool")?.classList.add("on"); }
+      });
+    });
+    const change = asmE("asmToolsChange");
+    if (change) change.addEventListener("change", () => asmE("asmToolsEditor").classList.toggle("hidden", !change.checked));
+  }
+
+  function asmCollectTools() {
+    if (asmToolsMode === "none") return {detail:null};
+    const editing = asmToolsMode === "required" || !!asmE("asmToolsChange")?.checked;
+    if (!editing) return {detail:null};
+    const box = asmE("asmToolsBox");
+    const tools = [];
+    for (const t of ASM_TOOLS) {
+      if (!box.querySelector(`[data-tool="${t.key}"]`)?.checked) continue;
+      const qty = Number(box.querySelector(`[data-qty="${t.key}"]`)?.value || 0);
+      if (!Number.isInteger(qty) || qty < 1) return {error:`체크한 치공구의 수량을 1 이상으로 입력하세요: ${t.name}`};
+      tools.push({key:t.key, name:t.name, qty});
+    }
+    const other = (asmE("asmToolsOther")?.value || "").trim();
+    const okVal = asmE("asmToolsOk")?.value || "";
+    const note = (asmE("asmToolsNote")?.value || "").trim();
+    if (!tools.length && !other) return {error:"작업 전 필수 치공구를 1개 이상 체크하거나 기타 치공구를 적으세요."};
+    if (!okVal) return {error:"치공구 준비 상태(준비 완료 / 일부 부족 · 이상)를 선택하세요."};
+    if (okVal === "0" && !note) return {error:"부족하거나 이상 있는 치공구 내용을 적으세요."};
+    return {detail:{tools, tools_other:other, tools_ok: okVal === "1", tools_note:note, tools_stage: asmToolsMode === "required" ? "start" : "change"}};
+  }
+
+  /* BLK를 새로 불러왔을 때 입력칸(입고 체크표 · 치공구 · 공정률 · 안내문)을 맞춥니다. */
+  function asmRenderInputs() {
+    asmRenderIntake();
+    asmRenderTools();
+    const state = asmCurrentState;
+    const cur = state?.current;
+    const prog = asmE("asmProgress");
+    if (prog) {
+      if (asmIntakeDraft) asmIntakeSync();
+      else { prog.readOnly = false; prog.value = cur && cur.quality !== "불합격" ? (cur.progress || 0) : 0; }
+    }
+    const step = state?.currentStep;
+    const progLabel = prog?.previousElementSibling;
+    if (progLabel && progLabel.tagName === "LABEL") progLabel.textContent = step === "소조립" && asmIntakeDraft ? "입고율 (%) · 자동" : step === "소조립" ? "입고율 (%)" : "현재 공정률 (%)";
+    const wc = asmE("asmWorkContent");
+    if (wc) {
+      const unit = asmCtx?.unit;
+      const ex = unit && unit.kind !== "legacy" ? (unit.kind === "mid" ? unit.blk : unit.mids[0]?.mid_no || unit.blk) : "805R1";
+      wc.placeholder = step === "소조립"
+        ? `예: ${ex}-S1 · S2 입고 확인, S3 협력사 출하 대기(입고 예정일)`
+        : step === "대조립"
+          ? `예: ${unit?.kind === "grand" ? unit.mids.map(m => m.mid_no).join(" · ") : "중조립"} 탑재 · 정렬, 맞대기 취부 · 용접, 변형교정`
+          : "예: 론지 · FB 취부 및 용접 / 보강재 취부 / 변형교정 등";
+    }
   }
 
   async function asmLoadState() {
@@ -2567,9 +3372,10 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const seq = ++asmStateSeq;
 
     if (!ship || !blk) {
-      asmCurrentRows = [];
-      asmCurrentState = asmBuildState([]);
+      asmApplyContext(null);
       asmRenderFlow();
+      asmRenderInputs();
+      asmRenderTreeBox();
       asmRenderRecent([]);
       if (status) status.textContent = "";
       return;
@@ -2577,24 +3383,35 @@ HWDK 조립공정 BLK 순차관리 통합 패치
 
     try {
       if (status) status.textContent = "BLK 공정상태 확인 중...";
-      const rows = await asmFetchBlockRows(ship, blk);
+      const ctx = await asmFetchContext(ship, blk, false);
       if (seq !== asmStateSeq) return;
-      asmCurrentRows = rows;
-      asmCurrentState = asmBuildState(rows);
+      asmApplyContext(ctx);
       asmRenderFlow();
-      asmRenderRecent(rows);
-      if (rows.length) {
-        const typeEl = asmE("asmShipType"), areaEl = asmE("asmArea");
-        const lastType = [...rows].reverse().find(r => r.ship_type)?.ship_type || "";
-        const lastArea = [...rows].reverse().find(r => r.area)?.area || "";
-        if (typeEl && !typeEl.value && [...typeEl.options].some(o => o.value === lastType)) typeEl.value = lastType;
-        if (areaEl && !areaEl.value && lastArea) areaEl.value = lastArea;
-      }
-      if (status) status.textContent = rows.length ? `등록 이력 ${rows.length}건` : "신규 BLK입니다. 소조립부터 시작합니다.";
+      asmRenderInputs();
+      asmRenderTreeBox();
+      asmRenderRecent(ctx.ownRows);
+      const typeEl = asmE("asmShipType"), areaEl = asmE("asmArea");
+      const lastType = [...ctx.ownRows].reverse().find(r => r.ship_type)?.ship_type || ctx.unit.shipType || ctx.family?.ship_type || "";
+      const lastArea = [...ctx.ownRows].reverse().find(r => r.area)?.area || ctx.family?.area || "";
+      if (typeEl && !typeEl.value && [...typeEl.options].some(o => o.value === lastType)) typeEl.value = lastType;
+      if (areaEl && !areaEl.value && lastArea) areaEl.value = lastArea;
+      const kind = ctx.unit.kind;
+      if (status) status.textContent = ctx.ownRows.length
+        ? `등록 이력 ${ctx.ownRows.length}건`
+        : kind === "grand" ? `대조립 BLK입니다. 구성 중조립 ${ctx.family.total}개가 모두 합격하면 대조립을 등록합니다.`
+        : kind === "mid" ? `신규 중조립 BLK입니다(대조립 ${ctx.unit.grand} 구성). 소조립 입고 확인부터 시작합니다.`
+        : "신규 BLK입니다. 소조립 입고 확인부터 시작합니다.";
     } catch (e) {
       if (seq !== asmStateSeq) return;
       if (status) status.textContent = "조립공정 조회 실패: " + (e?.message || "오류");
     }
+  }
+
+  function asmRowBadge(r, long) {
+    if (r.quality_status === "합격") return `<span class="asm-badge pass">${long ? `${ASM_GATE_TITLE[r.process_step] || "품질"} 합격` : "합격"}</span>`;
+    if (r.quality_status === "불합격") return `<span class="asm-badge fail">${long ? `${ASM_GATE_TITLE[r.process_step] || "품질"} 불합격` : "불합격"}</span>`;
+    if (r.quality_status === "대기") return '<span class="asm-badge pending">검사대기</span>';
+    return `<span class="asm-badge">${r.process_confirmed ? "완료확인" : "작업등록"}</span>`;
   }
 
   function asmRenderRecent(rows) {
@@ -2605,24 +3422,16 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       return;
     }
     const latest = [...rows].sort((a,b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0,20);
-    list.innerHTML = latest.map(r => {
-      const badge = r.quality_status === "합격"
-        ? '<span class="asm-badge pass">합격</span>'
-        : r.quality_status === "불합격"
-          ? '<span class="asm-badge fail">불합격</span>'
-          : r.quality_status === "대기"
-            ? '<span class="asm-badge pending">검사대기</span>'
-            : `<span class="asm-badge">${r.process_confirmed ? "완료확인" : "작업등록"}</span>`;
-      return `<div class="asm-log">
+    list.innerHTML = latest.map(r => `<div class="asm-log">
         <div class="asm-log-head">
-          <div class="asm-log-title">${asmEsc(r.process_step)} · ${Number(r.attempt_no || 1)}차 · ${asmPct(r.progress_rate)}</div>
-          <div>${badge}</div>
+          <div class="asm-log-title">${asmEsc(asmStepTitle(r.process_step))} · ${Number(r.attempt_no || 1)}차 · ${asmPct(r.progress_rate)}</div>
+          <div>${asmRowBadge(r)}</div>
         </div>
         <div class="asm-log-meta">${asmEsc(asmDate(r.work_date))} · 투입 ${Number(r.manpower || 0)}명 · ${asmEsc(r.author_name || "-")}</div>
         ${r.work_content ? `<div class="asm-log-content">${asmEsc(r.work_content)}</div>` : ""}
-        ${r.quality_note ? `<div class="asm-log-meta">품질의견: ${asmEsc(r.quality_note)}</div>` : ""}
-      </div>`;
-    }).join("");
+        ${asmDetailHtml(r)}
+        ${r.quality_note ? `<div class="asm-log-meta">${asmEsc(ASM_GATE_TITLE[r.process_step] || "품질")} 의견: ${asmEsc(r.quality_note)}</div>` : ""}
+      </div>`).join("");
   }
 
   function asmValidateSave() {
@@ -2637,13 +3446,23 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     if (!shipType) return "선종을 선택하세요.";
     if (!shipNo) return "호선을 입력하세요.";
     if (!blkNo) return "BLK NO를 입력하세요.";
+    if (asmCurrentState?.prereqBlocked) return "구성 중조립이 모두 합격해야 대조립을 등록할 수 있습니다.";
+
+    if (asmIntakeDraft) {
+      const intake = asmCollectIntake();
+      if (intake.error) return intake.error;
+      if (confirmed && !intake.complete) return "소조립이 모두 입고되고 이상이 없어야 입고 완료확인을 할 수 있습니다.";
+    }
+    const tools = asmCollectTools();
+    if (tools.error) return tools.error;
+
     if (!workContent) return "오늘 작업내용을 입력하세요.";
     if (!Number.isInteger(manpower) || manpower < 1) return "투입 인원은 1명 이상의 정수로 입력하세요.";
     if (!Number.isFinite(progress) || progress < 0 || progress > 100) return "공정률은 0~100 사이로 입력하세요.";
     if (confirmed && progress !== 100) return "공정 완료 확인은 공정률 100%일 때만 가능합니다.";
 
     const s = asmCurrentState?.current;
-    if (s && s.quality !== "불합격" && progress < Number(s.progress || 0)) {
+    if (!asmIntakeDraft && s && s.quality !== "불합격" && progress < Number(s.progress || 0)) {
       return `현재 누적 공정률 ${asmPct(s.progress)}보다 낮게 입력할 수 없습니다.`;
     }
     return "";
@@ -2658,18 +3477,20 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       return;
     }
 
-    /* 화면을 열어 둔 사이 다른 사람이 등록 · 완료확인 · 품질판정을 했을 수 있으므로, 저장 직전에 BLK 상태를 다시 읽습니다. */
-    const asmStepLabel = (st) => st?.currentStep ? `${st.currentStep} ${asmCurrentAttempt(st.current)}차` : "";
-    const shownStep = asmStepLabel(asmCurrentState);
+    /* 화면을 열어 둔 사이 다른 사람이 등록 · 완료확인 · 품질판정 · 블록 구성 변경을 했을 수 있으므로, 저장 직전에 다시 읽습니다. */
+    const stepKey = (st) => st?.currentStep ? `${st.currentStep} ${asmCurrentAttempt(st.current)}차` : "";
+    const shownStep = stepKey(asmCurrentState);
+    const shownKind = asmCtx?.unit?.kind || "";
+    const shownTools = asmToolsMode;
     try {
       btn.disabled = true;
       status.textContent = "BLK 공정상태 확인 중...";
       ++asmStateSeq;
-      const rows = await asmFetchBlockRows(asmE("asmShipNo").value, asmE("asmBlkNo").value);
-      asmCurrentRows = rows;
-      asmCurrentState = asmBuildState(rows);
+      const ctx = await asmFetchContext(asmE("asmShipNo").value, asmE("asmBlkNo").value, true);
+      asmApplyContext(ctx);
       asmRenderFlow();
-      asmRenderRecent(rows);
+      asmRenderTreeBox();
+      asmRenderRecent(ctx.ownRows);
     } catch (e) {
       btn.disabled = false;
       status.textContent = "공정상태 확인 실패: " + (e?.message || "오류") + " · 등록하지 않았습니다.";
@@ -2678,16 +3499,23 @@ HWDK 조립공정 BLK 순차관리 통합 패치
 
     const state = asmCurrentState;
     if (state.allPassed) {
-      status.textContent = "이미 모든 조립공정과 품질검사가 완료된 BLK입니다.";
+      status.textContent = "이미 모든 공정과 검사가 완료된 BLK입니다.";
       return;
     }
     if (state.blockedByQuality) {
-      status.textContent = "품질검사 대기 중입니다. 검사 결과 등록 후 다음 작업을 진행하세요.";
+      status.textContent = `${ASM_GATE_TITLE[state.currentStep]} 대기 중입니다. 검사 결과 등록 후 다음 작업을 진행하세요.`;
+      return;
+    }
+    if (state.prereqBlocked) {
+      status.textContent = "구성 중조립이 모두 합격해야 대조립을 등록할 수 있습니다. 등록하지 않았습니다.";
       return;
     }
 
-    if (shownStep && shownStep !== asmStepLabel(state)) {
-      status.textContent = `그 사이 공정상태가 바뀌었습니다 (${shownStep} → ${asmStepLabel(state)}). 등록하지 않았습니다. 아래 진행상태를 확인한 뒤 다시 등록하세요.`;
+    /* 입고 체크표 · 치공구 기록 대상이 바뀌었는지도 함께 확인합니다. */
+    const toolsNow = asmToolsModeFor(state);
+    if ((shownKind && shownKind !== asmCtx.unit.kind) || (shownStep && shownStep !== stepKey(state)) || toolsNow !== shownTools) {
+      asmRenderInputs();
+      status.textContent = `그 사이 공정상태가 바뀌었습니다${shownStep !== stepKey(state) ? ` (${shownStep} → ${stepKey(state)})` : ""}. 등록하지 않았습니다. 아래 진행상태를 확인한 뒤 다시 등록하세요.`;
       return;
     }
     const errAfterRefresh = asmValidateSave();
@@ -2699,6 +3527,9 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const processStep = state.currentStep;
     const stepState = state.current;
     const confirmed = asmE("asmConfirm").checked;
+    const intake = processStep === "소조립" ? asmCollectIntake() : {detail:null};
+    const tools = processStep !== "소조립" ? asmCollectTools() : {detail:null};
+    const detail = intake.detail || tools.detail || null;
     const payload = {
       work_date: asmE("asmWorkDate").value || asmToday(),
       ship_type: asmE("asmShipType").value.trim(),
@@ -2709,7 +3540,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       attempt_no: asmCurrentAttempt(stepState),
       work_content: asmE("asmWorkContent").value.trim(),
       manpower: Number(asmE("asmManpower").value),
-      progress_rate: Number(asmE("asmProgress").value),
+      progress_rate: intake.detail ? intake.progress : Number(asmE("asmProgress").value),
       process_confirmed: confirmed,
       confirmed_at: confirmed ? new Date().toISOString() : null,
       confirmed_by: confirmed ? currentUserId : null,
@@ -2719,29 +3550,39 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       created_by: currentUserId,
       updated_at: new Date().toISOString()
     };
+    if (detail) payload.work_detail = detail;
 
+    const title = asmStepTitle(processStep);
     try {
       btn.disabled = true;
-      status.textContent = confirmed ? `${processStep} 완료확인 등록 중...` : `${processStep} 작업 등록 중...`;
+      status.textContent = confirmed ? `${title} 완료확인 등록 중...` : `${title} 작업 등록 중...`;
       const {error} = await supabase.from(ASM_TABLE).insert(payload);
       if (error) throw error;
 
       status.textContent = confirmed
-        ? `${processStep} 작업완료 확인 완료 · 품질검사 대기로 전환되었습니다.`
-        : `${processStep} 작업내용을 등록했습니다.`;
+        ? `${title} 완료확인 완료 · ${ASM_GATE_TITLE[processStep]} 대기로 전환되었습니다.`
+        : `${title} 작업내용을 등록했습니다.${tools.detail ? " 치공구 기록을 함께 저장했습니다." : ""}`;
 
       asmE("asmWorkContent").value = "";
       asmE("asmConfirm").checked = false;
       await asmLoadState();
-      asmE("asmProgress").value = asmCurrentState?.current?.progress || 0;
       asmLoadQualityQueue();
       asmLoadDashboard();
       asmLoadAllRows(true).then(() => { asmRenderBlockPicker(); asmRenderCaution(); }).catch(() => {});
     } catch (e) {
       status.textContent = "등록 실패: " + (e?.message || "오류");
     } finally {
-      if (!asmCurrentState?.blockedByQuality && !asmCurrentState?.allPassed) btn.disabled = false;
+      if (!asmCurrentState?.blockedByQuality && !asmCurrentState?.allPassed && !asmCurrentState?.prereqBlocked) btn.disabled = false;
     }
+  }
+
+  /* 저장 직전 상태에서 치공구 기록이 필요한지 다시 계산(화면에 보인 것과 같은지 비교용) */
+  function asmToolsModeFor(state) {
+    const step = state?.currentStep;
+    if (!state || (step !== "중조립" && step !== "대조립") || state.blockedByQuality || state.allPassed || state.prereqBlocked) return "none";
+    const attempt = asmCurrentAttempt(state.current);
+    const has = asmRowsByStep(asmCurrentRows, step).some(r => Number(r.attempt_no || 1) === attempt && r.work_detail && Array.isArray(r.work_detail.tools));
+    return has ? "optional" : "required";
   }
 
   function asmResetForm() {
@@ -2751,10 +3592,12 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     asmE("asmWorkContent").value = "";
     asmE("asmManpower").value = "1";
     asmE("asmProgress").value = "0";
+    asmE("asmProgress").readOnly = false;
     asmE("asmConfirm").checked = false;
-    asmCurrentRows = [];
-    asmCurrentState = asmBuildState([]);
+    asmApplyContext(null);
     asmRenderFlow();
+    asmRenderInputs();
+    asmRenderTreeBox();
     asmRenderRecent([]);
   }
 
@@ -2774,11 +3617,12 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     return asmAllRows;
   }
 
+  /* 블록 구성에 없는 BLK(예전 방식)를 BLK별로 묶습니다. */
   function asmGroupBlocks(rows) {
     const map = new Map();
     (rows || []).forEach(r => {
       const key = `${String(r.ship_no || "").trim()}|||${String(r.blk_no || "").trim().toUpperCase()}`;
-      if (!map.has(key)) map.set(key, {ship_type:"", ship_no:r.ship_no || "", blk_no:r.blk_no || "", area:"", lastAt:"", rows:[]});
+      if (!map.has(key)) map.set(key, {ship_type:"", ship_no:asmShipKey(r.ship_no), blk_no:asmNorm(r.blk_no), area:"", lastAt:"", rows:[]});
       const b = map.get(key);
       b.rows.push(r);
       if (r.ship_type) b.ship_type = r.ship_type;
@@ -2786,38 +3630,73 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       const at = String(r.created_at || "");
       if (at > b.lastAt) b.lastAt = at;
     });
-    return [...map.values()].map(b => ({...b, state:asmBuildState(b.rows)}));
+    return [...map.values()].map(b => ({...b, state:asmBuildState(b.rows, ASM_STEPS)}));
   }
 
-  function asmBlockStatusText(b) {
-    const st = b.state;
-    if (st.allPassed) return "최종완료";
-    const s = st.current;
-    if (s.quality === "대기") return `${st.currentStep} 검사대기`;
-    if (s.quality === "불합격") return `${st.currentStep} 재작업 필요`;
-    if (s.progress > 0) return `${st.currentStep} ${asmPct(s.progress)}`;
-    return `${st.currentStep} 시작 전`;
+  /* 블록 구성 + 작업행 → 대조립 묶음(families)과 미등록 BLK(legacy) */
+  function asmBuildOverview(rows, tree) {
+    const rowsByShip = new Map();
+    (rows || []).forEach(r => {
+      const ship = asmShipKey(r.ship_no);
+      if (!rowsByShip.has(ship)) rowsByShip.set(ship, []);
+      rowsByShip.get(ship).push(r);
+    });
+    const inTree = new Set();
+    const groups = new Map();
+    (tree || []).forEach(t => {
+      inTree.add(`${t.ship_no}|||${t.grand_no}`);
+      inTree.add(`${t.ship_no}|||${t.mid_no}`);
+      const key = `${t.ship_no}|||${t.grand_no}`;
+      if (!groups.has(key)) groups.set(key, {ship:t.ship_no, grand:t.grand_no, mids:[]});
+      groups.get(key).mids.push(t);
+    });
+    const families = [...groups.values()].map(g => asmBuildFamily(
+      g.ship, g.grand,
+      g.mids.sort((a, b) => (a.sort_order - b.sort_order) || asmNumSort(a.mid_no, b.mid_no)),
+      rowsByShip.get(g.ship) || []
+    ));
+    const legacy = asmGroupBlocks((rows || []).filter(r => !inTree.has(`${asmShipKey(r.ship_no)}|||${asmNorm(r.blk_no)}`)));
+    return {families, legacy};
+  }
+
+  function asmPickCls(state) {
+    const q = state.current?.quality;
+    return q === "대기" ? "pending" : q === "불합격" ? "fail" : "";
   }
 
   /* 진행 중인 BLK를 눌러서 바로 불러오기 */
   function asmRenderBlockPicker() {
     const box = asmE("asmBlockPicker");
     if (!box) return;
-    const open = asmGroupBlocks(asmAllRows).filter(b => !b.state.allPassed).sort((a,b) => b.lastAt.localeCompare(a.lastAt));
+    const {families, legacy} = asmBuildOverview(asmAllRows, asmTree);
+    const open = [];
+    families.forEach(f => {
+      f.mids.forEach(x => {
+        if (!x.rows.length || x.state.allPassed) return;
+        const lastAt = x.rows.reduce((m, r) => String(r.created_at || "") > m ? String(r.created_at || "") : m, "");
+        open.push({ship_type:f.ship_type, ship_no:f.ship, blk_no:x.blk, area:x.rows[x.rows.length - 1]?.area || f.area, lastAt, label:`${x.blk}`, sub:`대조립 ${f.grand}`, text:asmStateText(x.state, "mid"), cls:asmPickCls(x.state)});
+      });
+      if (f.ready && !f.grandState.allPassed) {
+        open.push({ship_type:f.ship_type, ship_no:f.ship, blk_no:f.grand, area:f.area, lastAt:f.lastAt, label:`대조립 ${f.grand}`, sub:"", text:asmStateText(f.grandState, "grand"), cls:asmPickCls(f.grandState) || (f.grandRows.length ? "" : "ready")});
+      }
+    });
+    legacy.forEach(b => {
+      if (b.state.allPassed) return;
+      open.push({ship_type:b.ship_type, ship_no:b.ship_no, blk_no:b.blk_no, area:b.area, lastAt:b.lastAt, label:b.blk_no, sub:"구성 미등록", text:asmStateText(b.state, "legacy"), cls:asmPickCls(b.state)});
+    });
+    open.sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+
     if (!open.length) {
-      box.innerHTML = '<div class="hint">진행 중인 BLK가 없습니다. 아래에 선종 · 호선 · BLK NO를 입력하면 소조립부터 새로 시작합니다.</div>';
+      box.innerHTML = '<div class="hint">진행 중인 BLK가 없습니다. 아래에 선종 · 호선 · BLK NO를 입력하면 새로 시작합니다. 중조립 BLK는 소조립 입고 확인부터 시작합니다.</div>';
       return;
     }
     const shown = open.slice(0, 24);
     box.innerHTML = `<div class="asm-picker-title">진행 중인 BLK ${open.length}건 <span class="hint">· 눌러서 불러오기</span></div>
-      <div class="asm-picker-grid">${shown.map((b, i) => {
-        const q = b.state.current.quality;
-        const cls = q === "대기" ? "pending" : q === "불합격" ? "fail" : "";
-        return `<button type="button" class="asm-picker-btn ${cls}" data-asm-pick="${i}">
-          <span class="asm-picker-name">${asmEsc(b.ship_no)} · ${asmEsc(b.blk_no)}</span>
-          <span class="asm-picker-state">${asmEsc(asmBlockStatusText(b))}</span>
-        </button>`;
-      }).join("")}</div>
+      <div class="asm-picker-grid">${shown.map((b, i) => `<button type="button" class="asm-picker-btn ${b.cls}" data-asm-pick="${i}">
+          <span class="asm-picker-name">${asmEsc(b.ship_no)} · ${asmEsc(b.label)}</span>
+          ${b.sub ? `<span class="asm-picker-sub">${asmEsc(b.sub)}</span>` : ""}
+          <span class="asm-picker-state">${asmEsc(b.text)}</span>
+        </button>`).join("")}</div>
       ${open.length > shown.length ? `<div class="hint">최근 작업한 ${shown.length}건만 표시합니다. 나머지는 호선과 BLK NO를 직접 입력하세요.</div>` : ""}`;
     box.querySelectorAll("[data-asm-pick]").forEach(btn => {
       btn.onclick = () => {
@@ -2827,20 +3706,35 @@ HWDK 조립공정 BLK 순차관리 통합 패치
         asmE("asmShipNo").value = b.ship_no;
         asmE("asmBlkNo").value = b.blk_no;
         asmE("asmArea").value = b.area || "";
-        /* 불합격 뒤 재작업은 새 차수이므로 0%부터, 그 밖에는 지금까지의 누적 공정률부터 시작합니다. */
-        asmLoadState().then(() => {
-          const cur = asmCurrentState?.current;
-          asmE("asmProgress").value = cur && cur.quality !== "불합격" ? (cur.progress || 0) : 0;
-        });
+        asmRenderBlkOptions();
+        asmLoadState();
       };
     });
   }
 
-  /* 일일작업등록 화면을 열 때: 입력칸 초기화 → BLK 상태 · 진행 중 목록 · 누적 부적합 불러오기 */
+  /* BLK NO 입력칸의 자동완성: 블록 구성의 대조립 · 중조립 번호 */
+  function asmRenderBlkOptions() {
+    const dl = asmE("asmBlkOptions");
+    if (!dl) return;
+    const ship = asmShipKey(asmE("asmShipNo")?.value);
+    const list = [...asmTree]
+      .filter(t => !ship || t.ship_no === ship)
+      .sort((a, b) => asmNumSort(a.ship_no, b.ship_no) || asmNumSort(a.grand_no, b.grand_no) || (a.sort_order - b.sort_order) || asmNumSort(a.mid_no, b.mid_no));
+    const opts = new Map();
+    list.forEach(t => {
+      const pre = ship ? "" : `${t.ship_no} · `;
+      if (!opts.has(t.grand_no)) opts.set(t.grand_no, `${pre}대조립`);
+      if (!opts.has(t.mid_no)) opts.set(t.mid_no, `${pre}중조립 (대조립 ${t.grand_no})`);
+    });
+    dl.innerHTML = [...opts].slice(0, 400).map(([v, l]) => `<option value="${asmEsc(v)}" label="${asmEsc(l)}"></option>`).join("");
+  }
+
+  /* 일일작업등록 화면을 열 때: 입력칸 초기화 → 블록 구성 · BLK 상태 · 진행 중 목록 · 누적 부적합 불러오기 */
   function asmOpenRegister() {
     asmResetForm();
+    asmLoadTree(true).then(asmRenderBlkOptions);
     asmLoadState();
-    asmLoadAllRows(true)
+    Promise.all([asmLoadAllRows(true), asmLoadTree()])
       .then(() => { asmRenderBlockPicker(); asmRenderCaution(); })
       .catch(e => { const box = asmE("asmBlockPicker"); if (box) box.innerHTML = `<div class="hint">진행 중 BLK 목록을 불러오지 못했습니다: ${asmEsc(e?.message || "오류")}</div>`; });
   }
@@ -2859,7 +3753,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     if (date) q = q.eq("work_date", date);
     if (ship) q = q.ilike("ship_no", `%${ship}%`);
     if (blk) q = q.ilike("blk_no", `%${blk}%`);
-    const {data, error} = await q;
+    const [{data, error}] = await Promise.all([q, asmLoadTree()]);
     if (seq !== asmListSeq) return;
     if (error) { status.textContent = "등록 목록 조회 실패: " + (error?.message || "오류"); return; }
 
@@ -2871,18 +3765,17 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       summary.textContent = `등록 ${rows.length}건 · 투입 인원 합계 ${manpower}명${rows.length >= 500 ? " · 최근 500건까지만 표시" : ""}`;
     }
     list.innerHTML = rows.length ? `<div class="asm-list">${rows.map(r => {
-      const badge = r.quality_status === "합격" ? '<span class="asm-badge pass">품질 합격</span>'
-        : r.quality_status === "불합격" ? '<span class="asm-badge fail">품질 불합격</span>'
-        : r.quality_status === "대기" ? '<span class="asm-badge pending">검사대기</span>'
-        : '<span class="asm-badge">작업등록</span>';
+      const role = asmTreeRole(r.ship_no, r.blk_no);
+      const where = role.kind === "mid" ? ` (대조립 ${role.grand})` : role.kind === "grand" ? " (대조립)" : "";
       return `<div class="asm-log">
         <div class="asm-log-head">
-          <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(r.process_step)} ${Number(r.attempt_no || 1)}차 · ${asmPct(r.progress_rate)}</div>
-          <div>${badge}</div>
+          <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)}${asmEsc(where)} · ${asmEsc(asmStepTitle(r.process_step))} ${Number(r.attempt_no || 1)}차 · ${asmPct(r.progress_rate)}</div>
+          <div>${asmRowBadge(r, true)}</div>
         </div>
         <div class="asm-log-meta">작업일 ${asmEsc(asmDate(r.work_date))} · 투입 ${Number(r.manpower || 0)}명 · 작성자 ${asmEsc(r.author_name || "-")}${r.area ? ` · ${asmEsc(r.area)}` : ""}</div>
         ${r.work_content ? `<div class="asm-log-content">${asmEsc(r.work_content)}</div>` : ""}
-        ${r.quality_note ? `<div class="asm-log-meta">품질의견: ${asmEsc(r.quality_note)}</div>` : ""}
+        ${asmDetailHtml(r)}
+        ${r.quality_note ? `<div class="asm-log-meta">${asmEsc(ASM_GATE_TITLE[r.process_step] || "품질")} 의견: ${asmEsc(r.quality_note)}</div>` : ""}
       </div>`;
     }).join("")}</div>` : "";
   }
@@ -2894,10 +3787,11 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     section.dataset.bound = "1";
 
     asmE("asmRefreshBtn").onclick = () => {
-      asmLoadState();
+      asmLoadTree(true).then(() => { asmRenderBlkOptions(); asmLoadState(); });
       asmLoadAllRows(true).then(() => { asmRenderBlockPicker(); asmRenderCaution(); }).catch(() => {});
     };
     asmE("asmSaveBtn").onclick = asmSave;
+    asmE("asmShipNo").addEventListener("input", asmRenderBlkOptions);
     asmE("asmShipNo").addEventListener("change", asmLoadState);
     asmE("asmBlkNo").addEventListener("change", asmLoadState);
     asmE("asmBlkNo").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); });
@@ -2905,8 +3799,15 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       if (Number(asmE("asmProgress").value) !== 100) asmE("asmConfirm").checked = false;
     });
     asmE("asmConfirm").addEventListener("change", () => {
-      if (asmE("asmConfirm").checked && Number(asmE("asmProgress").value) !== 100) {
-        asmE("asmConfirm").checked = false;
+      const c = asmE("asmConfirm");
+      if (!c.checked) return;
+      if (asmIntakeDraft && !asmIntakeCalc().complete) {
+        c.checked = false;
+        asmE("asmStatus").textContent = "소조립이 모두 입고되고 이상이 없어야 입고 완료확인을 할 수 있습니다.";
+        return;
+      }
+      if (Number(asmE("asmProgress").value) !== 100) {
+        c.checked = false;
         asmE("asmStatus").textContent = "공정 완료 확인은 공정률 100%일 때만 가능합니다.";
       }
     });
@@ -2921,9 +3822,228 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       asmE(id).addEventListener("keydown", e => { if (e.key === "Enter") asmLoadWorkList(); });
     });
 
+    asmBindTreeUi();
     window.asmOpenRegister = asmOpenRegister;
     window.asmLoadWorkList = asmLoadWorkList;
+    window.asmOpenTree = asmOpenTree;
     asmResetForm();
+  }
+
+  /* ===== 블록 구성 탭: 대조립 BLK별 중조립 · 소조립 등록 ===== */
+  let asmTreeSaving = false;
+
+  /* 한 줄에 중조립 하나: "805R1 : 805R1-S1, 805R1-S2" (콜론이 없으면 첫 번호가 중조립) */
+  function asmParseTreeLines(text, grand) {
+    const mids = [];
+    const seenMid = new Set(), seenPart = new Map();
+    const lines = String(text || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    for (const line of lines) {
+      let midText, partText;
+      const idx = line.search(/[:：]/);
+      if (idx >= 0) { midText = line.slice(0, idx); partText = line.slice(idx + 1); }
+      else { const tokens = line.split(/[,\s]+/).filter(Boolean); midText = tokens.shift() || ""; partText = tokens.join(","); }
+      const mid = asmNorm(midText).replace(/\s+/g, "");
+      if (!mid) return {error:`중조립 번호가 없는 줄이 있습니다: ${line}`};
+      if (!ASM_NO_RE.test(mid)) return {error:`중조립 번호는 영문 · 숫자 · '-'만 쓸 수 있습니다: ${mid}`};
+      if (mid === grand) return {error:`중조립 번호가 대조립 번호와 같습니다: ${mid}`};
+      if (seenMid.has(mid)) return {error:`같은 중조립이 두 번 입력되었습니다: ${mid}`};
+      seenMid.add(mid);
+      const parts = [];
+      for (const raw of partText.split(/[,\s]+/).filter(Boolean)) {
+        const p = asmNorm(raw);
+        if (!ASM_NO_RE.test(p)) return {error:`소조립 번호는 영문 · 숫자 · '-'만 쓸 수 있습니다: ${p}`};
+        if (p === mid || p === grand) return {error:`소조립 번호가 중조립 · 대조립 번호와 같습니다: ${p}`};
+        if (seenPart.has(p)) return {error:`소조립 ${p}이(가) ${seenPart.get(p)}와 ${mid}에 중복 입력되었습니다.`};
+        seenPart.set(p, mid);
+        parts.push(p);
+      }
+      mids.push({mid, parts});
+    }
+    return {mids};
+  }
+
+  function asmTreeLinesText(mids) {
+    return mids.map(m => `${m.mid_no} : ${m.small_parts.join(", ")}`).join("\n");
+  }
+
+  async function asmSaveTree() {
+    if (asmTreeSaving) return;
+    const status = asmE("asmTreeStatus");
+    const shipType = asmE("asmTreeShipType").value;
+    const ship = asmShipKey(asmE("asmTreeShipNo").value);
+    const grand = asmNorm(asmE("asmTreeGrand").value).replace(/\s+/g, "");
+    if (!shipType) { status.textContent = "선종을 선택하세요."; return; }
+    if (!ship) { status.textContent = "호선을 입력하세요."; return; }
+    if (!grand) { status.textContent = "대조립 BLK 번호를 입력하세요."; return; }
+    if (!ASM_NO_RE.test(grand)) { status.textContent = "대조립 번호는 영문 · 숫자 · '-'만 쓸 수 있습니다."; return; }
+    const parsed = asmParseTreeLines(asmE("asmTreeLines").value, grand);
+    if (parsed.error) { status.textContent = parsed.error; return; }
+    if (!parsed.mids.length) { status.textContent = "중조립을 한 줄에 하나씩 1개 이상 입력하세요."; return; }
+
+    asmTreeSaving = true;
+    const btn = asmE("asmTreeSave");
+    btn.disabled = true;
+    try {
+      status.textContent = "기존 구성과 작업 기록 확인 중...";
+      await asmLoadTree(true);
+      if (asmTreeError) throw asmTreeError;
+      const existing = asmTreeMids(ship, grand);
+      const newMids = parsed.mids.map(m => m.mid);
+      const removed = existing.filter(e => !newMids.includes(e.mid_no));
+
+      const asMid = asmTree.find(t => t.ship_no === ship && t.mid_no === grand);
+      if (asMid) throw new Error(`${grand}은(는) 이미 대조립 ${asMid.grand_no}의 중조립으로 등록되어 있습니다.`);
+      for (const m of newMids) {
+        const other = asmTree.find(t => t.ship_no === ship && t.mid_no === m && t.grand_no !== grand);
+        if (other) throw new Error(`중조립 ${m}은(는) 이미 대조립 ${other.grand_no}에 등록되어 있습니다.`);
+        if (asmTree.some(t => t.ship_no === ship && t.grand_no === m)) throw new Error(`${m}은(는) 이미 대조립 번호로 등록되어 있어 중조립으로 쓸 수 없습니다.`);
+      }
+
+      /* 작업 기록과 맞지 않는 구성은 저장하지 않습니다. */
+      const blks = [grand, ...newMids, ...removed.map(r => r.mid_no)];
+      const {data:wf, error:wfErr} = await supabase.from(ASM_TABLE).select("blk_no,process_step").eq("ship_no", ship).in("blk_no", blks);
+      if (wfErr) throw wfErr;
+      const wfRows = wf || [];
+      if (wfRows.some(r => asmNorm(r.blk_no) === grand && r.process_step !== "대조립")) throw new Error(`BLK ${grand}에는 이미 소조립 입고 · 중조립 작업 기록이 있어 대조립 BLK로 등록할 수 없습니다.`);
+      const midWithGrand = newMids.find(m => wfRows.some(r => asmNorm(r.blk_no) === m && r.process_step === "대조립"));
+      if (midWithGrand) throw new Error(`BLK ${midWithGrand}에는 대조립 작업 기록이 있어 중조립으로 등록할 수 없습니다.`);
+      const removedUsed = removed.filter(r => wfRows.some(w => asmNorm(w.blk_no) === r.mid_no)).map(r => r.mid_no);
+      if (removedUsed.length) throw new Error(`작업 기록이 있는 중조립은 구성에서 뺄 수 없습니다: ${removedUsed.join(", ")}`);
+      const added = newMids.filter(m => !existing.some(e => e.mid_no === m));
+      if (added.length && existing.length && wfRows.some(r => asmNorm(r.blk_no) === grand)) {
+        if (!confirm(`대조립 ${grand}은(는) 이미 대조립 작업이 시작되었습니다.\n중조립 ${added.join(", ")}을(를) 추가하면 추가한 중조립이 합격할 때까지 대조립을 등록할 수 없습니다.\n\n계속할까요?`)) { status.textContent = "저장을 취소했습니다."; return; }
+      }
+
+      status.textContent = "블록 구성 저장 중...";
+      const now = new Date().toISOString();
+      for (const r of removed) {
+        const {error} = await supabase.from(ASM_TREE_TABLE).delete().eq("id", r.id);
+        if (error) throw error;
+      }
+      for (const [i, m] of parsed.mids.entries()) {
+        const ex = existing.find(e => e.mid_no === m.mid);
+        if (ex) {
+          const {error} = await supabase.from(ASM_TREE_TABLE).update({ship_type:shipType, small_parts:m.parts, sort_order:i + 1, updated_at:now}).eq("id", ex.id);
+          if (error) throw error;
+        } else {
+          const {error} = await supabase.from(ASM_TREE_TABLE).insert({ship_type:shipType, ship_no:ship, grand_no:grand, mid_no:m.mid, small_parts:m.parts, sort_order:i + 1, created_by:currentUserId});
+          if (error) throw error;
+        }
+      }
+      const partCount = parsed.mids.reduce((n, m) => n + m.parts.length, 0);
+      status.textContent = `${ship} 대조립 ${grand} 구성을 저장했습니다 · 중조립 ${parsed.mids.length}개 · 소조립 ${partCount}개${removed.length ? ` · 뺀 중조립 ${removed.map(r => r.mid_no).join(", ")}` : ""}`;
+      asmTreeAt = 0;
+      await asmLoadTreeList();
+      asmRenderBlkOptions();
+    } catch (e) {
+      status.textContent = "블록 구성 저장 실패: " + (e?.message || "오류");
+      asmTreeAt = 0;
+    } finally {
+      asmTreeSaving = false;
+      btn.disabled = false;
+    }
+  }
+
+  async function asmDeleteTree(ship, grand) {
+    const status = asmE("asmTreeStatus");
+    try {
+      await asmLoadTree(true);
+      const mids = asmTreeMids(ship, grand);
+      const {data, error} = await supabase.from(ASM_TABLE).select("blk_no").eq("ship_no", ship).in("blk_no", [grand, ...mids.map(m => m.mid_no)]).limit(1);
+      if (error) throw error;
+      if ((data || []).length) { status.textContent = `대조립 ${grand} 또는 구성 중조립에 작업 기록이 있어 삭제할 수 없습니다.`; return; }
+      if (!confirm(`${ship} 대조립 ${grand} 구성(중조립 ${mids.length}개)을 삭제할까요?`)) return;
+      const {error:delErr} = await supabase.from(ASM_TREE_TABLE).delete().eq("ship_no", ship).eq("grand_no", grand);
+      if (delErr) throw delErr;
+      status.textContent = `${ship} 대조립 ${grand} 구성을 삭제했습니다.`;
+      asmTreeAt = 0;
+      await asmLoadTreeList();
+      asmRenderBlkOptions();
+    } catch (e) {
+      status.textContent = "블록 구성 삭제 실패: " + (e?.message || "오류");
+    }
+  }
+
+  async function asmLoadTreeList() {
+    const list = asmE("asmTreeList");
+    if (!list) return;
+    const filter = (asmE("asmTreeFilterShip")?.value || "").trim();
+    list.innerHTML = '<div class="hint">블록 구성 불러오는 중...</div>';
+    await asmLoadTree(true);
+    if (asmTreeError) { list.innerHTML = `<div class="empty">블록 구성을 불러오지 못했습니다: ${asmEsc(asmTreeError?.message || "오류")}</div>`; return; }
+    let rows = [];
+    try { rows = await asmLoadAllRows(); } catch (e) { rows = []; }
+    const tree = filter ? asmTree.filter(t => t.ship_no.includes(filter)) : asmTree;
+    if (!tree.length) {
+      list.innerHTML = `<div class="empty">${filter ? "조건에 맞는 블록 구성이 없습니다." : "등록된 블록 구성이 없습니다. 위에서 대조립 BLK와 구성 중조립을 등록하세요."}</div>`;
+      return;
+    }
+    const {families} = asmBuildOverview(rows, tree);
+    const ships = new Map();
+    families.forEach(f => {
+      if (!ships.has(f.ship)) ships.set(f.ship, []);
+      ships.get(f.ship).push(f);
+    });
+    list.innerHTML = [...ships.entries()].sort((a, b) => asmNumSort(a[0], b[0])).map(([ship, fams]) => `
+      <details class="asm-ship" open>
+        <summary>${asmEsc([fams.find(f => f.ship_type)?.ship_type, ship].filter(Boolean).join(" "))} 호선 · 대조립 ${fams.length}건 · 중조립 ${fams.reduce((n, f) => n + f.total, 0)}건</summary>
+        ${fams.sort((a, b) => asmNumSort(a.grand, b.grand)).map(f => `
+          <div class="asm-tree-card">
+            <div class="asm-tree-card-head">
+              <div>
+                <div class="asm-blk-name">대조립 ${asmEsc(f.grand)}</div>
+                <div class="asm-blk-sub">중조립 ${f.total}개 · 소조립 ${f.mids.reduce((n, x) => n + x.node.small_parts.length, 0)}개 · ${asmEsc(asmStateText(f.grandState, "grand"))}</div>
+              </div>
+              <div class="asm-tree-card-actions">
+                <button type="button" class="secondary" data-tree-edit="${asmEsc(ship)}|${asmEsc(f.grand)}">수정</button>
+                <button type="button" class="secondary asm-danger-text" data-tree-del="${asmEsc(ship)}|${asmEsc(f.grand)}">삭제</button>
+              </div>
+            </div>
+            <div class="asm-tree-mids">${f.mids.map(x => `<div class="asm-tree-mid">
+              <strong>${asmEsc(x.blk)}</strong>
+              <span>${x.node.small_parts.length ? asmEsc(x.node.small_parts.join(", ")) : "소조립 미등록"}</span>
+              <em>${asmEsc(asmStateText(x.state, "mid"))}</em>
+            </div>`).join("")}</div>
+          </div>`).join("")}
+      </details>`).join("");
+
+    list.querySelectorAll("[data-tree-edit]").forEach(btn => {
+      btn.onclick = () => {
+        const [ship, grand] = btn.dataset.treeEdit.split("|");
+        const mids = asmTreeMids(ship, grand);
+        const type = mids.find(m => m.ship_type)?.ship_type || "";
+        asmE("asmTreeShipType").value = [...asmE("asmTreeShipType").options].some(o => o.value === type) ? type : "";
+        asmE("asmTreeShipNo").value = ship;
+        asmE("asmTreeGrand").value = grand;
+        asmE("asmTreeLines").value = asmTreeLinesText(mids);
+        asmE("asmTreeStatus").textContent = `${ship} 대조립 ${grand} 구성을 불러왔습니다. 고친 뒤 구성 저장을 누르세요.`;
+        asmE("asmTreeGrand").scrollIntoView?.({block:"center", behavior:"smooth"});
+      };
+    });
+    list.querySelectorAll("[data-tree-del]").forEach(btn => {
+      btn.onclick = () => { const [ship, grand] = btn.dataset.treeDel.split("|"); asmDeleteTree(ship, grand); };
+    });
+  }
+
+  function asmOpenTree() {
+    asmLoadTreeList();
+  }
+
+  function asmBindTreeUi() {
+    const section = asmE("blockTreeSection");
+    if (!section || section.dataset.bound) return;
+    section.dataset.bound = "1";
+    asmE("asmTreeSave").onclick = asmSaveTree;
+    asmE("asmTreeClear").onclick = () => {
+      ["asmTreeShipNo","asmTreeGrand","asmTreeLines"].forEach(id => { asmE(id).value = ""; });
+      asmE("asmTreeShipType").value = "";
+      asmE("asmTreeStatus").textContent = "";
+    };
+    asmE("asmTreeRefresh").onclick = asmLoadTreeList;
+    asmE("asmTreeSearch").onclick = asmLoadTreeList;
+    asmE("asmTreeReset").onclick = () => { asmE("asmTreeFilterShip").value = ""; asmLoadTreeList(); };
+    asmE("asmTreeFilterShip").addEventListener("keydown", e => { if (e.key === "Enter") asmLoadTreeList(); });
+    asmE("asmTreeGrand").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); });
   }
 
   /* ===== 조립 품질검사 ===== */
@@ -2939,6 +4059,16 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     {key:"temporary",   label:"임시 취부물·불필요 부착물 제거 및 제거부 보수"},
     {key:"handover",    label:"최종 청소·표식·후속공정 인계 상태"}
   ];
+  /* 소조립 입고 검사 항목 */
+  const ASM_INTAKE_ITEMS = [
+    {key:"intake_qty",    label:"입고 수량·소조립 번호 / 도면 대비 누락 없음"},
+    {key:"intake_mark",   label:"마킹·식별표·방향 표시 확인"},
+    {key:"intake_dim",    label:"주요 치수·형상 / 변형 여부 확인"},
+    {key:"intake_weld",   label:"소조립 용접 외관·미용접부 확인"},
+    {key:"intake_damage", label:"운반 중 손상·찍힘·녹 상태 확인"},
+    {key:"intake_doc",    label:"선행공정 검사기록·인계서류 확인"}
+  ];
+  const asmQualityItemsFor = (step) => step === "소조립" ? ASM_INTAKE_ITEMS : ASM_QUALITY_ITEMS;
   /* 최근 검사이력으로 보여줄 건수. 검사대기는 건수 제한 없이 모두 표시합니다. */
   const ASM_QUALITY_HISTORY_LIMIT = 100;
   let asmQualitySaving = false;
@@ -2951,7 +4081,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
   }
 
   function asmQualityChecklistEditor(r) {
-    return `<div class="quality-checklist" data-quality-id="${r.id}">${ASM_QUALITY_ITEMS.map(item => `
+    return `<div class="quality-checklist" data-quality-id="${r.id}">${asmQualityItemsFor(r.process_step).map(item => `
       <div class="quality-check-row" data-key="${item.key}" data-label="${asmEsc(item.label)}">
         <div class="quality-check-name">${asmEsc(item.label)}</div>
         <select class="quality-check-result">
@@ -3078,19 +4208,33 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     }
   }
 
+  /* 입고 체크표를 검사자가 볼 수 있게 표시 */
+  function asmIntakeReadHtml(r) {
+    const list = r.work_detail?.intake;
+    if (!Array.isArray(list) || !list.length) return "";
+    return `<div class="asm-intake-read">${list.map(x => {
+      const cls = !x.arrived ? "miss" : x.ok === false ? "ng" : "ok";
+      const text = !x.arrived ? (x.eta ? `미입고 · ${asmMD(x.eta)} 예정` : "미입고") : x.ok === false ? (x.action === "reinbound" ? "불량 · 재입고" : "불량 · 보수") : "입고";
+      return `<span class="asm-intake-pill ${cls}" title="${asmEsc(x.note || "")}">${asmEsc(x.no)} · ${text}</span>`;
+    }).join("")}</div>`;
+  }
+
   function asmQualityCard(r, actionable) {
+    const role = asmTreeRole(r.ship_no, r.blk_no);
+    const where = role.kind === "mid" ? `대조립 ${role.grand} 구성 중조립` : role.kind === "grand" ? "대조립 BLK" : "";
     const head = `
       <div class="asm-log-head">
         <div>
-          <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(r.process_step)} ${Number(r.attempt_no || 1)}차</div>
-          <div class="asm-log-meta">작업일 ${asmEsc(asmDate(r.work_date))} · 작업등록자 ${asmEsc(r.author_name || "-")} · 투입 ${Number(r.manpower || 0)}명${r.area ? ` · 구역 ${asmEsc(r.area)}` : ""}</div>
+          <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(asmStepTitle(r.process_step))} ${Number(r.attempt_no || 1)}차 <span class="asm-gate-tag">${asmEsc(ASM_GATE_TITLE[r.process_step] || "품질검사")}</span></div>
+          <div class="asm-log-meta">${where ? `${asmEsc(where)} · ` : ""}작업일 ${asmEsc(asmDate(r.work_date))} · 작업등록자 ${asmEsc(r.author_name || "-")} · 투입 ${Number(r.manpower || 0)}명${r.area ? ` · 구역 ${asmEsc(r.area)}` : ""}</div>
         </div>
         <div>${asmQualityBadge(r.quality_status)}</div>
       </div>
-      <div class="asm-log-content"><strong>작업내용</strong><br>${asmEsc(r.work_content || "(작업내용 없음)")}</div>`;
+      <div class="asm-log-content"><strong>작업내용</strong><br>${asmEsc(r.work_content || "(작업내용 없음)")}</div>
+      ${asmIntakeReadHtml(r)}`;
 
     const body = actionable
-      ? `<div style="margin-top:12px;font-weight:900;color:#16324f">검사항목</div>
+      ? `<div style="margin-top:12px;font-weight:900;color:#16324f">${asmEsc(ASM_GATE_TITLE[r.process_step] || "검사")} 항목</div>
          ${asmQualityChecklistEditor(r)}
          <textarea class="quality-overall-note" placeholder="종합 판정 의견 / 합격·불합격 사유를 반드시 입력하세요."></textarea>
          <div class="asm-quality-actions">
@@ -3136,7 +4280,8 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const status = asmE("asmQualityStatus");
     if (!list || !status) return;
 
-    status.textContent = `검사대기 ${pending.length}건 · 최근 검사이력 ${history.length}건`;
+    const intakeWaiting = pending.filter(r => r.process_step === "소조립").length;
+    status.textContent = `검사대기 ${pending.length}건${intakeWaiting ? ` (입고 검사 ${intakeWaiting}건 포함)` : ""} · 최근 검사이력 ${history.length}건`;
     list.innerHTML = `
       <h3>검사대기</h3>
       <div class="asm-list">${pending.length
@@ -3183,7 +4328,8 @@ HWDK 조립공정 BLK 순차관리 통합 패치
         .in("quality_status", ["합격","불합격"])
         .order("quality_checked_at", {ascending:false})
         .order("id", {ascending:false})
-        .limit(ASM_QUALITY_HISTORY_LIMIT)
+        .limit(ASM_QUALITY_HISTORY_LIMIT),
+      asmLoadTree()
     ]);
 
     if (seq !== asmQualitySeq) return;
@@ -3215,34 +4361,58 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     window.asmLoadQualityQueue = asmLoadQualityQueue;
   }
 
-  /* ===== 생산통합지표: BLK별 공정 · 품질 현황 + 부적합 누적 ===== */
-  function asmDashboardStageHtml(s) {
+  /* ===== 생산통합지표: 대조립 → 중조립 공정 · 품질 현황 + 부적합 누적 + 치공구 기록 ===== */
+  /* 소조립은 '작업'이 아니라 입고 관리이므로 입고율과 미입고 · 불량 조치로 표시합니다. */
+  function asmIntakeDashText(s) {
+    const sum = s.intake;
+    const cnt = sum ? ` (${sum.arrived}/${sum.total})` : "";
+    if (s.passed) return `입고 100%${cnt} · 입고 검사 합격${s.attempt > 1 ? ` (${s.attempt}차)` : ""}`;
+    if (s.quality === "대기") return `입고 100%${cnt} · 입고 검사 대기`;
+    if (s.quality === "불합격") return "입고 검사 불합격\n보수 · 재입고 요망";
+    if (!s.hasRows) return "입고 0% · 입고 대기";
+    if (!sum) return `입고 ${asmPct(s.progress)} · 입고 확인중`;
+    const todo = [...sum.missing, ...sum.defects];
+    const head = `입고 ${sum.pct}%${cnt}${s.hadFailure ? " · 재입고 확인" : ""}`;
+    if (!todo.length) return `${head} · 입고 검사 요청 전`;
+    return `${head}\n${todo.slice(0, 2).map(x => asmPartIssueText(x)).join("\n")}${todo.length > 2 ? `\n외 ${todo.length - 2}건` : ""}`;
+  }
+
+  function asmDashStepText(s, opts = {}) {
+    if (s.step === "소조립") return asmIntakeDashText(s);
+    if (s.passed) return `합격${s.attempt > 1 ? ` (${s.attempt}차)` : ""}`;
+    if (s.quality === "대기") return "검사대기";
+    if (s.quality === "불합격") return `불합격 · ${s.attempt + 1}차 재작업`;
+    if (opts.locked) return opts.locked;
+    if (s.progress > 0) return `${asmPct(s.progress)} · ${s.hadFailure ? "재작업중" : "작업중"}`;
+    return opts.ready ? "시작 가능" : "시작 전";
+  }
+
+  function asmDashboardStageHtml(s, opts = {}) {
     let cls = "";
-    let text = `${asmPct(s.progress)} · ${s.status}`;
     if (s.passed) cls = "pass";
     else if (s.quality === "대기") cls = "pending";
     else if (s.quality === "불합격") cls = "fail";
-    if (s.hadFailure && !s.passed && s.quality !== "불합격") text += " · 재작업";
+    else if (opts.locked) cls = "locked";
+    else if (s.step === "소조립" && s.intake && (s.intake.issues || asmIntakeLate(s.intake))) cls = "warn";
     return `<div class="asm-dash-step ${cls}">
-      <strong>${asmEsc(s.step)}</strong>
-      <span>${asmEsc(text)}</span>
+      <strong>${asmEsc(opts.title || asmStepShort(s.step))}</strong>
+      <span>${asmEsc(asmDashStepText(s, opts))}</span>
     </div>`;
   }
 
-  function asmRenderDefects(rows, blocks) {
+  function asmRenderDefects(rows, reworkedUnits) {
     const box = asmE("asmDefectBox");
     if (!box) return;
     const stats = asmDefectStats(rows);
-    const reworked = blocks.filter(b => Object.values(b.state.steps).some(s => s.hadFailure)).length;
     const head = `<div class="asm-dashboard-title">품질 부적합 누적 현황</div>
-      <div class="asm-dashboard-sub">검사에서 부적합으로 기록된 항목을 누적 집계합니다. 건수가 많은 항목이 반복되는 문제이며, 같은 내용이 일일작업등록 화면의 '작업 전 확인'에 표시됩니다.</div>`;
+      <div class="asm-dashboard-sub">입고 검사 · 품질검사에서 부적합으로 기록된 항목을 누적 집계합니다. 건수가 많은 항목이 반복되는 문제이며, 같은 내용이 일일작업등록 화면의 '작업 전 확인'에 표시됩니다.</div>`;
     if (!stats.inspected) {
-      box.innerHTML = head + '<div class="empty">아직 품질검사 기록이 없습니다.</div>';
+      box.innerHTML = head + '<div class="empty">아직 검사 기록이 없습니다.</div>';
       return;
     }
     const max = stats.items.reduce((m, it) => Math.max(m, it.count), 1);
     box.innerHTML = head + `
-      <div class="asm-defect-meta">품질검사 ${stats.inspected}건 · 합격 ${stats.inspected - stats.failed}건 · 불합격 ${stats.failed}건 · 재작업이 있었던 BLK ${reworked}건</div>
+      <div class="asm-defect-meta">검사 ${stats.inspected}건 · 합격 ${stats.inspected - stats.failed}건 · 불합격 ${stats.failed}건 · 재작업이 있었던 BLK ${reworkedUnits}건</div>
       ${stats.items.length ? stats.items.map(it => `
         <div class="asm-defect-row">
           <div class="asm-defect-head">
@@ -3250,68 +4420,168 @@ HWDK 조립공정 BLK 순차관리 통합 패치
             <span class="asm-defect-count">${it.count}건</span>
           </div>
           <div class="asm-defect-track"><div class="asm-defect-fill" style="width:${Math.round(it.count / max * 100)}%"></div></div>
-          <div class="asm-defect-note">${ASM_STEPS.filter(st => it.steps[st]).map(st => `${st} ${it.steps[st]}건`).join(" · ")}${it.lastNote ? ` · 최근: ${asmEsc(it.lastNote)} (${asmEsc(it.lastWhere)})` : ""}</div>
+          <div class="asm-defect-note">${ASM_STEPS.filter(st => it.steps[st]).map(st => `${asmStepShort(st)} ${it.steps[st]}건`).join(" · ")}${it.lastNote ? ` · 최근: ${asmEsc(it.lastNote)} (${asmEsc(it.lastWhere)})` : ""}</div>
         </div>`).join("") : '<div class="empty">부적합으로 기록된 항목이 없습니다.</div>'}`;
   }
 
-  function asmRenderDashboard(rows) {
+  /* 치공구 기록: 공정 · 차수마다 가장 최근 기록을 기준으로 집계 */
+  function asmToolsStats(rows) {
+    const latest = new Map();
+    const started = new Map();
+    (rows || []).forEach(r => {
+      if (r.process_step !== "중조립" && r.process_step !== "대조립") return;
+      const key = `${asmShipKey(r.ship_no)}|${asmNorm(r.blk_no)}|${r.process_step}|${Number(r.attempt_no || 1)}`;
+      if (!started.has(key)) started.set(key, r);
+      const d = r.work_detail;
+      if (!d || !Array.isArray(d.tools)) return;
+      const prev = latest.get(key);
+      if (!prev || asmByCreated(prev, r) <= 0) latest.set(key, r);
+    });
+    const recs = [...latest.values()];
+    const usage = new Map();
+    recs.forEach(r => r.work_detail.tools.forEach(t => {
+      const u = usage.get(t.key) || {name:t.name || t.key, count:0, qty:0};
+      u.count++; u.qty += Number(t.qty || 0);
+      usage.set(t.key, u);
+    }));
+    const short = recs.filter(r => r.work_detail.tools_ok === false).sort((a, b) => asmByCreated(b, a));
+    const missing = [...started.entries()].filter(([k]) => !latest.has(k)).map(([, r]) => r);
+    return {records:recs.length, usage:[...usage.values()].sort((a, b) => b.count - a.count || b.qty - a.qty), short, missing};
+  }
+
+  function asmRenderToolsStats(rows) {
+    const box = asmE("asmToolsStatBox");
+    if (!box) return 0;
+    const st = asmToolsStats(rows);
+    const head = `<div class="asm-dashboard-title">작업 전 필수 치공구 기록</div>
+      <div class="asm-dashboard-sub">중조립 · 대조립 작업을 시작하기 전에 기록한 치공구를 공정 · 차수별로 집계합니다. 부족 · 이상으로 기록된 건은 작업 전에 보완해야 합니다.</div>`;
+    if (!st.records && !st.missing.length) {
+      box.innerHTML = head + '<div class="empty">아직 치공구 기록이 없습니다.</div>';
+      return 0;
+    }
+    box.innerHTML = head + `
+      <div class="asm-defect-meta">기록 ${st.records}건 · 준비 완료 ${st.records - st.short.length}건 · 부족·이상 ${st.short.length}건${st.missing.length ? ` · 기록 없이 작업한 공정 ${st.missing.length}건` : ""}</div>
+      ${st.short.length ? `<div class="asm-tool-short-list">${st.short.slice(0, 8).map(r => `<div class="asm-tool-short">
+        <strong>${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(asmStepTitle(r.process_step))} ${Number(r.attempt_no || 1)}차</strong>
+        <span>${asmEsc(r.work_detail.tools_note || "부족 · 이상")} · ${asmEsc(asmDate(r.work_date))} ${asmEsc(r.author_name || "")}</span>
+      </div>`).join("")}</div>` : ""}
+      ${st.missing.length ? `<div class="asm-defect-note">기록 없이 작업한 공정: ${asmEsc(st.missing.slice(0, 10).map(r => `${r.ship_no} ${r.blk_no} ${asmStepShort(r.process_step)} ${Number(r.attempt_no || 1)}차`).join(", "))}${st.missing.length > 10 ? " 외" : ""}</div>` : ""}
+      ${st.usage.length ? `<div class="asm-tool-usage">${st.usage.map(u => `<span class="asm-tool-pill">${asmEsc(u.name)} <b>${u.count}건</b>${u.qty ? ` · ${u.qty}개` : ""}</span>`).join("")}</div>` : ""}`;
+    return st.short.length;
+  }
+
+  function asmSummaryCard(label, value, total) {
+    return `<div class="asm-summary"><div class="asm-summary-label">${asmEsc(label)}</div><div class="asm-summary-value">${value}${total !== undefined ? `<span class="asm-summary-total"> / ${total}</span>` : ""}</div></div>`;
+  }
+
+  function asmRenderDashboard(rows, tree) {
     const summary = asmE("asmDashboardSummary");
     const content = asmE("asmDashboardContent");
     const status = asmE("asmDashboardStatus");
     if (!summary || !content) return;
 
-    const blocks = asmGroupBlocks(rows);
-    const completed = blocks.filter(b => b.state.allPassed).length;
-    const qcWaiting = blocks.filter(b => Object.values(b.state.steps).some(s => s.quality === "대기")).length;
-    const failed = blocks.filter(b => Object.values(b.state.steps).some(s => s.quality === "불합격")).length;
-    const smallDone = blocks.filter(b => b.state.steps["소조립"].passed).length;
-    const midDone = blocks.filter(b => b.state.steps["중조립"].passed).length;
+    const {families, legacy} = asmBuildOverview(rows, tree);
+    const midUnits = families.flatMap(f => f.mids);
+    const midTotal = midUnits.length + legacy.length;
+    const grandTotal = families.length + legacy.length;
+    const intakeDone = midUnits.filter(x => x.state.steps["소조립"].passed).length + legacy.filter(b => b.state.steps["소조립"].passed).length;
+    const midDone = midUnits.filter(x => x.state.steps["중조립"].passed).length + legacy.filter(b => b.state.steps["중조립"].passed).length;
+    const grandDone = families.filter(f => f.grandState.allPassed).length + legacy.filter(b => b.state.allPassed).length;
+    const states = [...midUnits.map(x => x.state), ...families.map(f => f.grandState), ...legacy.map(b => b.state)];
+    const qcWaiting = states.filter(s => s.current?.quality === "대기").length;
+    const failed = states.filter(s => s.current?.quality === "불합격").length;
+    const reworked = [...midUnits.map(x => x.state), ...families.map(f => f.grandState), ...legacy.map(b => b.state)]
+      .filter(s => Object.values(s.steps).some(x => x.hadFailure)).length;
 
-    const totalProgress = blocks.length
-      ? blocks.reduce((sum,b) => sum + ASM_STEPS.reduce((x,step) => x + Number(b.state.steps[step].progress || 0),0),0) / (blocks.length * ASM_STEPS.length)
-      : 0;
+    const avg = (list) => list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
+    const famProgress = families.map(f => {
+      const midAvg = avg(f.mids.map(x => (Number(x.state.steps["소조립"].progress || 0) + Number(x.state.steps["중조립"].progress || 0)) / 2));
+      return midAvg * 2 / 3 + Number(f.grandState.steps["대조립"].progress || 0) / 3;
+    });
+    const legacyProgress = legacy.map(b => avg(ASM_STEPS.map(step => Number(b.state.steps[step].progress || 0))));
+    const totalProgress = avg([...famProgress, ...legacyProgress]);
 
-    summary.innerHTML = `
-      <div class="asm-summary"><div class="asm-summary-label">전체 BLK</div><div class="asm-summary-value">${blocks.length}</div></div>
-      <div class="asm-summary"><div class="asm-summary-label">소조립 합격</div><div class="asm-summary-value">${smallDone}</div></div>
-      <div class="asm-summary"><div class="asm-summary-label">중조립 합격</div><div class="asm-summary-value">${midDone}</div></div>
-      <div class="asm-summary"><div class="asm-summary-label">대조립 최종완료</div><div class="asm-summary-value">${completed}</div></div>
-      <div class="asm-summary"><div class="asm-summary-label">품질검사 대기</div><div class="asm-summary-value">${qcWaiting}</div></div>
-      <div class="asm-summary"><div class="asm-summary-label">재작업 필요</div><div class="asm-summary-value">${failed}</div></div>`;
+    /* 소조립 입고율: 블록 구성에 등록된 소조립 기준(입고 검사 대기 · 합격은 전량 입고) */
+    const parts = {total:0, arrived:0, missing:0, bad:0, late:0};
+    midUnits.forEach(x => {
+      const n = x.node.small_parts.length;
+      if (!n) return;
+      parts.total += n;
+      const s = x.state.steps["소조립"];
+      if (s.passed || s.quality === "대기") { parts.arrived += n; return; }
+      if (s.intake) { parts.arrived += Math.min(n, s.intake.arrived); parts.missing += s.intake.missing.length; parts.bad += s.intake.issues; parts.late += asmIntakeLate(s.intake); }
+      else parts.missing += n;
+    });
 
-    status.textContent = blocks.length
-      ? `전체 평균 진행률 ${asmPct(totalProgress)} · BLK ${blocks.length}건`
+    asmRenderDefects(rows, reworked);
+    const toolShort = asmRenderToolsStats(rows);
+
+    summary.innerHTML = [
+      `<div class="asm-summary"><div class="asm-summary-label">소조립 입고율</div><div class="asm-summary-value">${parts.total ? `${Math.round(parts.arrived / parts.total * 100)}%<span class="asm-summary-total"> (${parts.arrived}/${parts.total})</span>` : "-"}</div></div>`,
+      asmSummaryCard("중조립 합격", midDone, midTotal),
+      asmSummaryCard("대조립 최종완료", grandDone, grandTotal),
+      asmSummaryCard("검사 대기", qcWaiting),
+      asmSummaryCard("재작업 필요", failed),
+      asmSummaryCard("치공구 부족", toolShort)
+    ].join("");
+
+    status.textContent = grandTotal
+      ? `전체 평균 진행률 ${asmPct(totalProgress)} · 대조립 BLK ${families.length}건 · 중조립 BLK ${midUnits.length}건${legacy.length ? ` · 블록 구성 미등록 BLK ${legacy.length}건` : ""}${parts.total ? ` · 소조립 미입고 ${parts.missing}개 · 불량 ${parts.bad}개${parts.late ? ` · 입고 지연 ${parts.late}개` : ""}` : ""}`
       : "등록된 조립공정 BLK가 없습니다.";
 
-    asmRenderDefects(rows, blocks);
-
-    if (!blocks.length) {
-      content.innerHTML = '<div class="empty">일일작업등록에서 조립공정을 등록하면 BLK별 현황이 표시됩니다.</div>';
+    if (!grandTotal) {
+      content.innerHTML = '<div class="empty">블록 구성 탭에서 대조립 · 중조립 구성을 등록하거나, 일일작업등록에서 조립공정을 등록하면 현황이 표시됩니다.</div>';
       return;
     }
 
     const ships = new Map();
-    blocks.forEach(b => {
-      const key = String(b.ship_no || "").trim();
-      if (!ships.has(key)) ships.set(key, {ship_no:b.ship_no,ship_type:b.ship_type,blocks:[]});
-      const ship = ships.get(key);
-      if (!ship.ship_type && b.ship_type) ship.ship_type = b.ship_type;
-      ship.blocks.push(b);
-    });
+    const shipOf = (no, type) => {
+      const key = asmShipKey(no);
+      if (!ships.has(key)) ships.set(key, {ship_no:key, ship_type:"", families:[], legacy:[]});
+      const s = ships.get(key);
+      if (!s.ship_type && type) s.ship_type = type;
+      return s;
+    };
+    families.forEach(f => shipOf(f.ship, f.ship_type).families.push(f));
+    legacy.forEach(b => shipOf(b.ship_no, b.ship_type).legacy.push(b));
 
-    content.innerHTML = '<div class="asm-dashboard-title" style="margin-top:16px">BLK별 공정 현황</div>' + [...ships.values()].map(ship => `
+    const familyHtml = (f) => {
+      const g = f.grandState.steps["대조립"];
+      return `<div class="asm-grand">
+        <div class="asm-grand-row">
+          <div>
+            <div class="asm-blk-name">대조립 ${asmEsc(f.grand)}</div>
+            <div class="asm-blk-sub">${f.area ? `${asmEsc(f.area)} · ` : ""}중조립 합격 ${f.midsPassed}/${f.total}${f.ready ? ` · ${asmEsc(asmStateText(f.grandState, "grand"))}` : " · 대조립 시작 전"}</div>
+          </div>
+          ${asmDashboardStageHtml(g, {title:"대조립 · 최종 품질검사", locked: f.ready ? "" : `구성 중조립 ${f.midsPassed}/${f.total} 합격 후 시작`, ready:f.ready})}
+        </div>
+        ${f.mids.map(x => `<div class="asm-mid-row">
+          <div>
+            <div class="asm-mid-name">${asmEsc(x.blk)}</div>
+            <div class="asm-blk-sub">소조립 ${x.node.small_parts.length}개 · ${asmEsc(asmStateText(x.state, "mid"))}</div>
+          </div>
+          ${asmDashboardStageHtml(x.state.steps["소조립"], {title:"소조립 입고 · 입고 검사"})}
+          ${asmDashboardStageHtml(x.state.steps["중조립"], {title:"중조립 · 품질검사", locked: x.state.steps["소조립"].passed ? "" : "입고 검사 합격 후 시작"})}
+        </div>`).join("")}
+      </div>`;
+    };
+
+    const legacyHtml = (b) => `<div class="asm-blk-row">
+      <div>
+        <div class="asm-blk-name">BLK ${asmEsc(b.blk_no)}</div>
+        <div class="asm-blk-sub">${asmEsc(b.area || "")}${b.area ? " · " : ""}${b.state.allPassed ? "최종완료" : `현재 ${asmEsc(asmStateText(b.state, "legacy"))}`}</div>
+      </div>
+      ${ASM_STEPS.map(step => asmDashboardStageHtml(b.state.steps[step])).join("")}
+    </div>`;
+
+    content.innerHTML = '<div class="asm-dashboard-title" style="margin-top:16px">대조립 BLK별 공정 현황</div>' +
+      '<div class="asm-dashboard-sub">대조립 BLK 아래에 구성 중조립이 표시됩니다. 중조립마다 소조립 입고 → 입고 검사 → 중조립 → 품질검사를 거치고, 모두 합격하면 대조립을 시작합니다.</div>' +
+      [...ships.values()].sort((a, b) => asmNumSort(a.ship_no, b.ship_no)).map(ship => `
       <details class="asm-ship" open>
-        <summary>${asmEsc([ship.ship_type, ship.ship_no].filter(Boolean).join(" "))} 호선 · BLK ${ship.blocks.length}건</summary>
-        ${ship.blocks
-          .sort((a,b) => String(a.blk_no).localeCompare(String(b.blk_no), "ko", {numeric:true}))
-          .map(b => `
-            <div class="asm-blk-row">
-              <div>
-                <div class="asm-blk-name">BLK ${asmEsc(b.blk_no)}</div>
-                <div class="asm-blk-sub">${asmEsc(b.area || "")}${b.area ? " · " : ""}${b.state.allPassed ? "최종완료" : `현재 ${asmEsc(asmBlockStatusText(b))}`}</div>
-              </div>
-              ${ASM_STEPS.map(step => asmDashboardStageHtml(b.state.steps[step])).join("")}
-            </div>`).join("")}
+        <summary>${asmEsc([ship.ship_type, ship.ship_no].filter(Boolean).join(" "))} 호선${ship.families.length ? ` · 대조립 ${ship.families.length}건 · 중조립 ${ship.families.reduce((n, f) => n + f.total, 0)}건` : ""}${ship.legacy.length ? ` · 구성 미등록 BLK ${ship.legacy.length}건` : ""}</summary>
+        ${ship.families.sort((a, b) => asmNumSort(a.grand, b.grand)).map(familyHtml).join("")}
+        ${ship.legacy.length ? `<div class="asm-legacy-title">블록 구성 미등록 BLK <span class="hint">· BLK 하나에서 소조립 입고 → 중조립 → 대조립 진행</span></div>
+          ${ship.legacy.sort((a, b) => asmNumSort(a.blk_no, b.blk_no)).map(legacyHtml).join("")}` : ""}
       </details>`).join("");
   }
 
@@ -3328,14 +4598,18 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       if (shipFilter) x = x.ilike("ship_no", `%${shipFilter}%`);
       return x;
     };
-    const {data, error} = typeof fetchAllRows === "function" ? await fetchAllRows(build) : await build().limit(1000);
+    const [{data, error}] = await Promise.all([
+      typeof fetchAllRows === "function" ? fetchAllRows(build) : build().limit(1000),
+      asmLoadTree(true)
+    ]);
 
     if (seq !== asmDashboardSeq) return;
     if (error) {
       status.textContent = "조립공정 지표 조회 실패: " + (error?.message || "오류");
       return;
     }
-    asmRenderDashboard(data || []);
+    const tree = shipFilter ? asmTree.filter(t => t.ship_no.includes(shipFilter)) : asmTree;
+    asmRenderDashboard(data || [], tree);
   }
 
   /* 생산통합지표 화면(HTML에 직접 들어 있음)에 버튼 동작을 연결합니다. */
